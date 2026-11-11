@@ -46,6 +46,21 @@
   </header>
 
   <section>
+    <h2>Importar texto (sem áudio)</h2>
+    <p>Se você já tem a transcrição, não precisa gravar nem usar o Whisper. Em "Importar texto", cole o texto ou escolha um arquivo .txt, .srt ou .vtt, e toque em <b>Importar e rodar o ETL</b>. A página cria uma nova reunião e gera o relatório e o pacote .zip.</p>
+    <h3>Formatos aceitos</h3>
+    <ul>
+      <li>Transcrição do YouTube com horários (o horário numa linha e o texto na seguinte, ou "0:12 texto").</li>
+      <li>Legendas SRT e VTT, inclusive as automáticas do YouTube.</li>
+      <li>Texto exportado por este transcritor ("[00:01:05] Falante: texto"), com falantes, notas e momentos marcados.</li>
+      <li>Texto puro, sem horários: os horários são estimados pelo ritmo de fala (150 palavras por minuto).</li>
+    </ul>
+    <h3>Como copiar a transcrição do YouTube</h3>
+    <p>Abra o vídeo no Chrome (youtube.com), toque na descrição, depois em "Mostrar transcrição", selecione o texto e copie. O app do YouTube normalmente não deixa copiar. Nem todo vídeo tem transcrição.</p>
+    <div class="aviso"><b>Limites:</b> a legenda automática do YouTube erra nomes e termos, e não tem pontuação. A página junta os fragmentos em frases para o ETL funcionar melhor, mas confira o que for importante. Textos acima de 3 milhões de caracteres devem ser divididos. Em textos longos, a tela mostra só as últimas 400 falas, e o texto completo continua salvo.</div>
+  </section>
+
+  <section>
     <h2>Versão 2: Modo aula (para palestras e cursos longos)</h2>
     <p>O Modo aula é o padrão desta versão. Ele grava em blocos, transcreve cada bloco e apaga o áudio, para o celular nunca encher. Só o texto fica guardado.</p>
     <ol>

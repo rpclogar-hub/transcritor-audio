@@ -53,6 +53,8 @@
     padding: 9px 10px; min-height: 44px; border: 1px solid var(--pl-input-border); border-radius: 8px; background: var(--pl-input-bg); color: var(--pl-input-text); }
   main select:disabled { opacity: .4; }
   textarea { min-height: 5rem; resize: vertical; }
+  main input[type=file] { width: 100%; font: inherit; font-size: .9rem; color: var(--pl-input-text); }
+  main input[type=file]::file-selector-button { font: inherit; font-weight: 700; margin-right: 10px; padding: 8px 16px; border: 1px solid var(--pl-btn-border); border-radius: 999px; background: var(--pl-btn-bg); color: var(--pl-btn-text); cursor: pointer; }
   .p-o select { text-overflow: ellipsis; }
 
   /* texto ao vivo */
@@ -185,6 +187,18 @@
       <button id="btnDoc" type="button">Baixar Word (.doc)</button>
       <button class="largo" id="btnPdf" type="button">PDF (imprimir / salvar como PDF)</button>
     </div>
+  </section>
+
+  <section class="card painel" id="cardImportar" aria-label="Importar texto">
+    <details>
+      <summary>Importar texto (YouTube, legenda ou arquivo)</summary>
+      <p class="ajuda">Cole uma transcrição pronta ou escolha um arquivo .txt, .srt ou .vtt. A página cria uma nova reunião e roda o ETL, sem usar áudio nem Whisper. Aceita: transcrição do YouTube com horários, legendas, texto exportado daqui e texto puro (os horários são estimados).</p>
+      <p class="ajuda"><b>YouTube:</b> abra o vídeo no Chrome (youtube.com), toque na descrição, em "Mostrar transcrição", selecione o texto e copie. O app do YouTube normalmente não deixa copiar a transcrição.</p>
+      <label class="campo">Título (opcional)<input type="text" id="impTitulo" autocomplete="off" placeholder="Ex.: Curso de vendas, dia 1"></label>
+      <label class="campo">Arquivo<input type="file" id="impArquivo" accept=".txt,.srt,.vtt,.md,text/plain"></label>
+      <label class="campo">Texto<textarea id="impTexto" placeholder="Cole aqui a transcrição..." spellcheck="false"></textarea></label>
+      <button class="principal" id="btnImportar" type="button">Importar e rodar o ETL</button>
+    </details>
   </section>
 
   <section class="card painel" aria-label="ETL">
@@ -388,7 +402,10 @@
       v.textContent = "O texto aparece aqui enquanto a reunião acontece.";
       elTexto.appendChild(v);
     }
+    var ini = m.linhas.length > 800 ? m.linhas.length - 400 : 0;     // texto muito longo: mostra só o final (tudo continua salvo)
+    if (ini) { var av = document.createElement("p"); av.className = "meta"; av.textContent = "Mostrando as últimas 400 falas de " + m.linhas.length + ". O texto completo está salvo e entra no ETL e nas exportações."; elTexto.appendChild(av); }
     m.linhas.forEach(function (l, i) {
+      if (i < ini) return;
       var p = document.createElement("p");
       p.className = "linha" + (l.d || l.k === "dest" ? " dest" : "") + (l.k === "nota" ? " nota" : "");
       var h = document.createElement("span"); h.className = "hora"; h.textContent = hhmmss(l.t); p.appendChild(h);
@@ -1434,6 +1451,125 @@
   $("btnEtlZip").addEventListener("click", function () { if (garantirEtl()) { baixarBlob(zipar(etlAtual.arquivos), etlAtual.pasta + ".zip"); aviso("Pacote " + etlAtual.pasta + ".zip gerado.", "ok"); } });
   $("btnEtlJson").addEventListener("click", function () { if (garantirEtl()) { baixarBlob(new Blob([JSON.stringify(etlAtual.json, null, 2)], { type: "application/json" }), etlAtual.pasta + ".json"); aviso("JSON gerado.", "ok"); } });
   $("btnEtlCopiar").addEventListener("click", function () { if (garantirEtl()) copiar(etlAtual.rel, "Relatório copiado."); });
+
+  /* ---------- Importar texto pronto (YouTube, legenda SRT/VTT, arquivo ou texto puro) ---------- */
+  var TEMPO = "((?:\\d{1,2}:)?\\d{1,2}:\\d{2}(?:[.,]\\d{1,3})?)";
+  var RE_SETA = new RegExp("^\\s*" + TEMPO + "\\s*-->\\s*" + TEMPO);                    // SRT e VTT
+  var RE_TEMPO_SOZINHO = new RegExp("^\\s*\\[?" + TEMPO + "\\]?\\s*$");                  // YouTube: horário numa linha, texto na(s) seguinte(s)
+  var RE_TEMPO_E_TEXTO = new RegExp("^\\s*\\[?" + TEMPO + "\\]?[\\s\\-–]+(\\S.*)$");    // "0:12 texto"
+  var RE_NOSSO = /^\s*\[((?:\d{1,2}:)?\d{1,2}:\d{2})\]\s*(?:★\s*)?(?:([^:\[\]\n]{1,30}):\s+)?(\S.*)$/;   // exportação deste transcritor (.txt)
+
+  function tempoParaSeg(t) { var s = 0; t.replace(",", ".").split(":").forEach(function (x) { s = s * 60 + (parseFloat(x) || 0); }); return s; }
+  function ehRuido(s) { return /^\[[^\]]*\]$/.test(s) || /^\([^)]*\)$/.test(s) || /^♪/.test(s); }   // [Música], [Aplausos]...
+
+  // Junta fragmentos curtos de legenda em frases maiores, para o ETL achar decisões e tarefas inteiras
+  function agruparFragmentos(itens) {
+    var out = [], acc = null;
+    itens.forEach(function (it) {
+      var s = (it.s || "").replace(/\s+/g, " ").trim();
+      if (!s || ehRuido(s)) return;
+      if (!acc) acc = { t: it.t, f: it.f || "", s: "" };
+      acc.s += (acc.s ? " " : "") + s;
+      var n = acc.s.split(/\s+/).length;
+      if (n >= 25 || (n >= 8 && /[.!?]$/.test(s))) { out.push(acc); acc = null; }
+    });
+    if (acc) out.push(acc);
+    return out;
+  }
+
+  function interpretarTexto(txt) {
+    txt = txt.replace(/\r/g, "").replace(/^﻿/, "");
+    var ls = txt.split("\n"), nao = ls.filter(function (l) { return l.trim(); }), itens = [], i, l, m, cur = null;
+
+    if (/-->/.test(txt)) {                                       // 1) legenda SRT/VTT (inclui VTT automático do YouTube, que repete linhas)
+      var ant = "";
+      for (i = 0; i < ls.length; i++) {
+        l = ls[i];
+        if ((m = RE_SETA.exec(l))) { cur = { t: tempoParaSeg(m[1]), s: [] }; itens.push(cur); }
+        else if (cur && l.trim() && !/^\d+$/.test(l.trim()) && !/^(NOTE|STYLE|WEBVTT|Kind:|Language:)/.test(l.trim())) { cur.s.push(l.trim().replace(/<[^>]+>/g, "").trim()); }
+        else if (!l.trim()) { cur = null; }
+      }
+      itens = itens.map(function (x) {
+        var c = x.s.filter(Boolean);
+        if (c.length > 1 && c[0] === ant) c = c.slice(1);        // legenda "rolante": a 1ª linha é a anterior repetida
+        else if (c.length === 1 && c[0] === ant) c = [];
+        if (x.s.length) ant = x.s[x.s.length - 1] || ant;
+        return { t: x.t, s: c.join(" "), f: "" };
+      }).filter(function (x) { return x.s; });
+      return { tipo: "legenda", itens: agruparFragmentos(itens) };
+    }
+
+    var nossos = nao.filter(function (x) { return RE_NOSSO.test(x); }).length;
+    if (nossos >= 3 && nossos >= nao.length * 0.5) {             // 2) exportação deste transcritor: [hh:mm:ss] Falante: texto
+      nao.forEach(function (x) {
+        var r = RE_NOSSO.exec(x); if (!r) { if (itens.length) itens[itens.length - 1].s += " " + x.trim(); return; }
+        var it = { t: tempoParaSeg(r[1]), f: r[2] ? r[2].trim() : "", s: r[3].trim(), k: "fala", d: /★/.test(x.slice(0, 20)) };
+        if (/^NOTA$/i.test(it.f)) { it.k = "nota"; it.f = ""; }
+        if (/^MOMENTO IMPORTANTE$/i.test(it.s)) { it.k = "dest"; it.s = ""; it.f = ""; }
+        itens.push(it);
+      });
+      return { tipo: "exportacao", itens: itens };
+    }
+
+    if (nao.filter(function (x) { return RE_TEMPO_SOZINHO.test(x); }).length >= 3) {   // 3) YouTube: "0:12" e o texto nas linhas seguintes
+      ls.forEach(function (x) {
+        if ((m = RE_TEMPO_SOZINHO.exec(x))) { cur = { t: tempoParaSeg(m[1]), s: [] }; itens.push(cur); }
+        else if (cur && x.trim()) cur.s.push(x.trim());
+      });
+      return { tipo: "youtube", itens: agruparFragmentos(itens.map(function (x) { return { t: x.t, s: x.s.join(" "), f: "" }; })) };
+    }
+
+    if (nao.filter(function (x) { return RE_TEMPO_E_TEXTO.test(x); }).length >= 3) {   // 4) "0:12 texto"
+      nao.forEach(function (x) {
+        if ((m = RE_TEMPO_E_TEXTO.exec(x))) { itens.push({ t: tempoParaSeg(m[1]), s: m[2].trim(), f: "" }); }
+        else if (itens.length) { itens[itens.length - 1].s += " " + x.trim(); }
+      });
+      return { tipo: "horario-no-inicio", itens: agruparFragmentos(itens) };
+    }
+
+    // 5) texto puro, sem horários: separa em blocos de ~45 palavras e estima o horário pelo ritmo de 150 palavras por minuto
+    var palavras = txt.replace(/\s+/g, " ").trim().split(" ").filter(Boolean), blocos = [], acum = [], t = 0;
+    var frases = txt.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s+/);
+    frases.forEach(function (f) {
+      acum.push(f);
+      var n = acum.join(" ").split(" ").length;
+      if (n >= 45) { blocos.push({ t: t, s: acum.join(" "), f: "" }); t += n / 2.5; acum = []; }
+    });
+    if (acum.length) blocos.push({ t: t, s: acum.join(" "), f: "" });
+    return { tipo: "texto", itens: blocos.filter(function (b) { return b.s && palavras.length; }) };
+  }
+
+  function importarTexto(txt, titulo) {
+    if (rodando) { aviso("Pare a transcrição antes de importar.", "atencao"); return; }
+    txt = (txt || "").trim();
+    if (!txt) { aviso("Cole um texto ou escolha um arquivo primeiro.", "atencao"); return; }
+    if (txt.length > 3000000) { aviso("O texto é grande demais (limite de 3 milhões de caracteres). Divida em partes.", "erro"); return; }
+    var r = interpretarTexto(txt);
+    if (!r.itens.length) { aviso("Não achei texto para importar.", "erro"); return; }
+    var m = novaReuniao(); m.titulo = (titulo || "").trim() || ("Importado " + dataCurta(Date.now()));
+    r.itens.sort(function (a, b) { return a.t - b.t; }).forEach(function (it) {
+      var k = it.k || "fala";
+      m.linhas.push({ t: +it.t.toFixed(1), s: k === "fala" ? aplicarGlossario(cap(it.s.trim())) : it.s, f: it.f || "", k: k, d: it.d ? true : undefined });
+    });
+    var ult = m.linhas[m.linhas.length - 1];
+    m.decorrido = ult.t + Math.max(2, ult.s.split(/\s+/).length / 2.5);
+    S.atual = m.id; salvar(); desenhar(); tick(); desenharReunioes();
+    var pal = contarPalavras(m), nomes = { legenda: "legenda SRT/VTT", youtube: "transcrição do YouTube", exportacao: "texto exportado deste transcritor", "horario-no-inicio": "texto com horários", texto: "texto sem horários (horários estimados pelo ritmo da fala)" };
+    rodarEtl(true);
+    aviso("Importado como " + nomes[r.tipo] + ": " + m.linhas.length + " trechos, " + pal + " palavras. ETL pronto abaixo.", "ok");
+    try { $("etlSaida").scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {}
+    $("impTexto").value = ""; $("impTitulo").value = ""; $("impArquivo").value = "";
+  }
+  $("btnImportar").addEventListener("click", function () { importarTexto($("impTexto").value, $("impTitulo").value); });
+  $("impArquivo").addEventListener("change", function () {
+    var f = this.files && this.files[0]; if (!f) return;
+    if (f.size > 8000000) { aviso("Arquivo grande demais (limite 8 MB).", "erro"); this.value = ""; return; }
+    var fr = new FileReader();
+    fr.onload = function () { $("impTexto").value = String(fr.result); if (!$("impTitulo").value) $("impTitulo").value = f.name.replace(/\.[^.]+$/, ""); aviso("Arquivo lido: " + f.name + ". Toque em \"Importar e rodar o ETL\".", "ok"); };
+    fr.onerror = function () { aviso("Não consegui ler o arquivo.", "erro"); };
+    fr.readAsText(f);
+  });
+  if (location.search.indexOf("teste") >= 0) { window.__imp = { interpretar: interpretarTexto, importar: importarTexto }; }
 
   /* ---------- Apagar texto ---------- */
   $("btnLimpar").addEventListener("click", function () { if (rodando) { aviso("Pare a transcrição antes de limpar.", "atencao"); return; } $("confirma").hidden = false; });
