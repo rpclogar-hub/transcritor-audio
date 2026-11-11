@@ -1,0 +1,1464 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>Transcritor de Aula</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="palco-base.css">
+<style>
+  /* Design "Palco" (palco-base.css traz os tokens --pl-*). Aqui só o que é específico do transcritor, sempre com var(--pl-*). */
+  html, body { margin: 0; background: #06071a; }
+  .palco { color-scheme: dark; justify-content: flex-start; align-items: center; padding-bottom: max(24px, env(safe-area-inset-bottom));
+    --pl-ok: #4cc58a; --pl-warn: #e0a84a; --pl-err: #ff6b5b; --pl-star: #f0c040; }
+  .palco.claro { color-scheme: light; --pl-ok: #1f7a4d; --pl-warn: #9a6200; --pl-err: #c0392b; --pl-star: #b8860b; }
+  main { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 16px; }
+  [hidden] { display: none !important; }
+  a.p-sair { text-decoration: none; display: inline-block; }
+  .sub, .meta, .ajuda { color: var(--pl-muted); }
+  .sub { font-size: .875rem; margin: 0; }
+  .meta { font-size: .875rem; }
+  .ajuda { font-size: .8125rem; margin: 0; }
+  h2 { font-size: .8rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; color: var(--pl-muted); }
+  .card { background: var(--pl-surface); border: 1px solid var(--pl-line); border-radius: 10px; padding: 14px; }
+  .painel { display: flex; flex-direction: column; gap: 12px; }
+
+  /* número em destaque = cronômetro */
+  .p-bpm strong { font-size: clamp(3rem, min(13vw, 12vh), 7rem); }
+  .ponto { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--pl-dim); margin-right: 4px; vertical-align: baseline; }
+  .gravando .ponto { background: var(--pl-orange); animation: pulsa 1.2s infinite; }
+  @keyframes pulsa { 50% { opacity: .25; } }
+  #estado { text-transform: uppercase; }
+  .p-mid .meta { display: block; margin-top: 4px; }
+  #aviso { font-size: .9rem; min-height: 1.4em; margin: 8px 0 0; }
+  #aviso.erro { color: var(--pl-err); } #aviso.ok { color: var(--pl-ok); } #aviso.atencao { color: var(--pl-warn); }
+  .cta:disabled, .seg button:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* botões gerais: contorno fino em pílula; principal = laranja (único uso grande) */
+  main button { border: 1px solid var(--pl-btn-border); border-radius: 999px; padding: 10px 18px; min-height: 44px;
+    color: var(--pl-btn-text); background: var(--pl-btn-bg); font-weight: 700; font-size: .9rem; }
+  main button:hover { background: var(--pl-hover); }
+  main button.principal, main button.sel { background: var(--pl-grad); border-color: transparent; color: #fff; box-shadow: 0 6px 18px #ff510040; }
+  main button.principal { min-height: 52px; font-size: 1rem; }
+  main button[disabled] { opacity: .4; cursor: not-allowed; }
+  .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grade .largo { grid-column: 1 / -1; }
+
+  /* campos */
+  label.campo { display: flex; flex-direction: column; gap: 5px; font-size: .62rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--pl-muted); }
+  main select, main input[type=text], main input[type=password], main textarea { width: 100%; min-width: 0; font: inherit; font-size: .9rem; font-weight: 400; letter-spacing: normal; text-transform: none;
+    padding: 9px 10px; min-height: 44px; border: 1px solid var(--pl-input-border); border-radius: 8px; background: var(--pl-input-bg); color: var(--pl-input-text); }
+  main select:disabled { opacity: .4; }
+  textarea { min-height: 5rem; resize: vertical; }
+  .p-o select { text-overflow: ellipsis; }
+
+  /* texto ao vivo */
+  #texto { max-height: 46vh; overflow-y: auto; min-height: 9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .linha { margin: 0 0 8px; cursor: pointer; }
+  .linha.dest { border-left: 3px solid var(--pl-orange); padding-left: 8px; }
+  .linha.nota { color: var(--pl-muted); }
+  .linha .estrela { color: var(--pl-star); font-weight: 700; }
+  .hora { color: var(--pl-muted); font-variant-numeric: tabular-nums; font-size: .8125rem; margin-right: 6px; }
+  .quem { font-weight: 800; margin-right: 6px; cursor: pointer; text-decoration: underline dotted; }
+  .parcial { color: var(--pl-muted); font-style: italic; }
+  .vazio { color: var(--pl-muted); }
+
+  .confirma { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  ul.notas { margin: 0; padding-left: 1.2rem; color: var(--pl-muted); font-size: .875rem; }
+  ul.notas a { color: var(--pl-orange-light); }
+  .palco.claro ul.notas a { color: var(--pl-blue); }
+  details > summary { cursor: pointer; font-weight: 800; min-height: 44px; display: flex; align-items: center; }
+  details[open] > summary { margin-bottom: 8px; }
+  .linhaflex { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .linhaflex > input { flex: 1 1 10rem; width: auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips button { min-height: 40px; padding: 6px 14px; }
+  .reuniao { border-top: 1px solid var(--pl-line); padding-top: 10px; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .reuniao:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+  .reuniao .acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+  .reuniao .acoes button { min-height: 40px; padding: 6px 12px; font-size: .85rem; }
+  .trecho { font-size: .875rem; color: var(--pl-muted); margin: 0; }
+</style>
+</head>
+<body>
+<div class="palco" id="palco">
+<main id="raiz">
+  <div class="p-top">
+    <span>Transcritor de aula · v2</span>
+    <div class="p-acts">
+      <button type="button" class="p-tema" id="tema" aria-label="Alternar entre modo claro e escuro" title="Modo claro / escuro">
+        <svg class="sol" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="lua" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+      <a class="p-sair" href="manual.html">Manual</a>
+    </div>
+  </div>
+  <p class="sub">Só texto: o áudio nunca é gravado nem guardado. O texto fica neste aparelho. Grátis, sem chave e sem conta.</p>
+
+  <div class="seg" role="group" aria-label="Idioma falado">
+    <button type="button" id="idPt" aria-pressed="true">Português</button>
+    <button type="button" id="idEn" aria-pressed="false">English</button>
+  </div>
+  <select id="selIdioma" hidden><option value="pt-BR">Português (Brasil)</option><option value="en-US">English (US)</option></select>
+
+  <section class="p-mid" aria-label="Controle">
+    <div class="p-bpm"><strong id="tempo">00:00:00</strong></div>
+    <small><span class="ponto" aria-hidden="true"></span> <span id="estado">Parado</span></small>
+    <span class="meta" id="palavras">0 palavras</span>
+    <span class="meta" id="tituloAtual"></span>
+    <div class="p-bot"><button class="cta" id="btnIniciar" type="button" data-on="false">Iniciar transcrição</button></div>
+    <p id="aviso" role="status" aria-live="polite"></p>
+  </section>
+
+  <div class="p-opts">
+    <div class="p-row p-r3">
+      <div class="p-o"><label for="selFonte">Áudio</label>
+        <select id="selFonte"><option value="mic">Microfone</option><option value="tela">Aba da reunião</option><option value="ambos">Reunião + meu mic</option></select></div>
+      <div class="p-o"><label for="selMotor">Motor</label>
+        <select id="selMotor"><option value="aula">Modo aula (blocos)</option><option value="chrome">Ao vivo: Chrome</option><option value="whisper">Ao vivo: Whisper</option></select></div>
+      <div class="p-o" id="campoVel"><label for="selVel">Velocidade</label><select id="selVel"></select></div>
+    </div>
+  </div>
+  <p class="ajuda" id="ajudaFonte"></p>
+
+  <section class="card painel" id="painelAula" aria-label="Modo aula">
+    <h2>Modo aula</h2>
+    <p class="ajuda">Grava em blocos, corta numa pausa, transcreve cada bloco e apaga o áudio. Só o texto fica guardado. O Whisper roda no próprio celular (grátis); o Gemini é a alternativa se ficar lento.</p>
+    <div class="p-opts"><div class="p-row p-r3">
+      <div class="p-o"><label for="selBloco">Bloco</label><select id="selBloco"><option value="1">1 min</option><option value="2">2 min</option><option value="5">5 min</option><option value="10">10 min</option></select></div>
+      <div class="p-o"><label for="selAulaMotor">Transcreve com</label><select id="selAulaMotor"><option value="whisper">Whisper (celular)</option><option value="gemini">Gemini (nuvem)</option></select></div>
+      <div class="p-o"><label for="selModeloW">Modelo</label><select id="selModeloW"><option value="tiny">Leve (tiny)</option><option value="base">Médio (base)</option><option value="small">Preciso (small)</option></select></div>
+    </div></div>
+    <details><summary>Gemini (alternativa)</summary>
+      <p class="ajuda">Cole a chave do Google AI Studio. Ela fica só neste aparelho. O áudio de cada bloco vai para o Google. O plano gratuito tem limites e regras próprias de uso de dados; confira. Cada bloco de 5 min usa cerca de 13 MB de internet, então prefira Wi-Fi.</p>
+      <label class="campo">Chave da API<input type="password" id="inpGKey" autocomplete="off" spellcheck="false" placeholder="cole a chave aqui"></label>
+      <label class="campo">Modelo<input type="text" id="inpGModelo" autocomplete="off" spellcheck="false" placeholder="gemini-2.5-flash"></label>
+      <label class="linhaflex" style="margin-top:8px"><input type="checkbox" id="chkGAuto"> Trocar sozinho para o Gemini se o Whisper ficar lento (precisa da chave)</label>
+    </details>
+    <pre id="aulaStatus" class="ajuda" style="white-space:pre-wrap;margin:0;font:inherit"></pre>
+    <button id="btnPendentes" type="button" hidden>Processar blocos pendentes</button>
+  </section>
+
+  <section class="card" aria-label="Texto">
+    <div id="texto" tabindex="0"><span class="vazio">O texto aparece aqui enquanto a reunião acontece.</span></div>
+    <p class="ajuda" style="margin-top:8px">Toque numa fala para marcar ★. Toque no nome do falante para trocá-lo.</p>
+  </section>
+
+  <section class="card painel" aria-label="Durante a reunião">
+    <div class="grade">
+      <button id="btnDestaque" type="button">★ Marcar momento</button>
+      <button id="btnNota" type="button">+ Nota digitada</button>
+    </div>
+    <div class="linhaflex" id="boxNota" hidden>
+      <input type="text" id="inpNota" placeholder="Digite a nota e toque em Salvar" autocomplete="off">
+      <button id="btnSalvarNota" type="button">Salvar</button>
+    </div>
+    <div>
+      <h2>Quem está falando</h2>
+      <p class="ajuda">Marcação manual: escolha o nome e as próximas falas ficam com ele.</p>
+      <div class="chips" id="chipsFalantes" style="margin-top:8px"></div>
+    </div>
+  </section>
+
+  <section class="card painel" aria-label="Saída">
+    <h2>Resumo, ata, mapa mental e perguntas (com o Claude)</h2>
+    <p class="ajuda">Escolha o modelo, copie e cole no app do Claude. Sem chave de API e sem custo extra.</p>
+    <label class="campo">Modelo
+      <select id="selModelo"></select>
+    </label>
+    <div id="boxPergunta" hidden>
+      <label class="campo">Sua pergunta sobre a reunião
+        <textarea id="inpPergunta" placeholder="Ex.: o que ficou combinado com o João e até quando?"></textarea>
+      </label>
+    </div>
+    <button class="principal" id="btnClaude" type="button">Copiar com instruções para o Claude</button>
+    <h2>Exportar</h2>
+    <div class="grade">
+      <button id="btnTexto" type="button">Copiar só o texto</button>
+      <button id="btnCompartilhar" type="button">Compartilhar</button>
+      <button id="btnTxt" type="button">Baixar .txt</button>
+      <button id="btnMd" type="button">Baixar .md</button>
+      <button id="btnSrt" type="button">Baixar .srt</button>
+      <button id="btnDoc" type="button">Baixar Word (.doc)</button>
+      <button class="largo" id="btnPdf" type="button">PDF (imprimir / salvar como PDF)</button>
+    </div>
+  </section>
+
+  <section class="card painel" aria-label="ETL">
+    <h2>Processo ETL da reunião</h2>
+    <p class="ajuda">Roda sozinho ao parar a transcrição. <b>Extrai</b> as falas com horário e falante, <b>trata</b> (limpa vícios e repetições, junta turnos, acha decisões, tarefas, riscos, perguntas, nomes, valores, datas, palavras-chave, capítulos e participação) e <b>carrega</b> tudo em um pacote .zip (relatório, base de conhecimento, JSON e planilhas CSV). Tudo no seu navegador.</p>
+    <div class="grade">
+      <button id="btnEtl" type="button">Rodar ETL agora</button>
+      <button id="btnEtlZip" type="button" class="principal" style="min-height:48px;font-size:1rem" disabled>Baixar pacote (.zip)</button>
+      <button id="btnEtlJson" type="button" disabled>Baixar JSON</button>
+      <button id="btnEtlCopiar" type="button" disabled>Copiar relatório</button>
+    </div>
+    <div id="etlSaida" class="ajuda" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:50vh;overflow-y:auto">Ainda não rodou.</div>
+  </section>
+
+  <section class="card" aria-label="Reuniões">
+    <details id="detReunioes">
+      <summary>Minhas reuniões</summary>
+      <div class="linhaflex">
+        <button id="btnNova" type="button" class="principal" style="min-height:48px;font-size:1rem">Nova reunião</button>
+      </div>
+      <div style="margin-top:10px"><input type="text" id="inpBusca" placeholder="Buscar em todas as reuniões" autocomplete="off"></div>
+      <div id="listaReunioes" style="margin-top:8px"></div>
+      <details id="detLixeira" style="margin-top:10px"><summary>Lixeira</summary><div id="listaLixeira"></div></details>
+    </details>
+  </section>
+
+  <section class="card" aria-label="Glossário">
+    <details>
+      <summary>Glossário (corrige termos e nomes)</summary>
+      <p class="ajuda">Uma regra por linha, no formato <b>errado = certo</b>. Vale para o texto novo, em qualquer idioma.</p>
+      <textarea id="inpGlossario" placeholder="cloude = Claude&#10;kiwi fai = Kiwify" spellcheck="false"></textarea>
+      <div class="linhaflex" style="margin-top:8px">
+        <button id="btnGlossario" type="button">Salvar glossário</button>
+        <button id="btnAplicarGlossario" type="button">Aplicar na reunião aberta</button>
+      </div>
+      <h2 style="margin-top:14px">Nomes de falantes</h2>
+      <div class="linhaflex" style="margin-top:8px">
+        <input type="text" id="inpFalante" placeholder="Nome (ex.: Maria)" autocomplete="off">
+        <button id="btnAddFalante" type="button">Adicionar</button>
+        <button id="btnLimpaFalantes" type="button">Remover todos</button>
+      </div>
+    </details>
+  </section>
+
+  <section class="card painel" aria-label="Limpar">
+    <div class="grade">
+      <button id="btnLimpar" type="button">Apagar texto desta reunião</button>
+    </div>
+    <div class="confirma" id="confirma" hidden>
+      <span>Apagar todo o texto desta reunião?</span>
+      <button id="btnSim" type="button">Sim, apagar</button>
+      <button id="btnNao" type="button">Cancelar</button>
+    </div>
+  </section>
+
+  <ul class="notas">
+    <li>Deixe a tela ligada e este navegador aberto durante a reunião.</li>
+    <li><b>Chrome (rápido):</b> só ouve o microfone e envia o áudio aos servidores do Google. Avise os participantes.</li>
+    <li><b>Whisper local:</b> a voz é transcrita dentro do seu navegador, sem enviar áudio a ninguém. Baixa um modelo (~80 MB) na primeira vez e é mais lento que o Chrome.</li>
+    <li><b>Áudio do computador:</b> só em Chrome/Edge no computador. Na janela que abrir, escolha a aba da reunião e marque "Compartilhar áudio". Windows também permite o áudio do sistema inteiro.</li>
+    <li><a href="manual.html">Manual passo a passo de uso</a></li>
+    <li><b>Celular:</b> o navegador do celular não consegue capturar o áudio interno. Use o microfone (com o som da chamada no alto-falante).</li>
+  </ul>
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var CHAVE = "transcritor_aula_v1", CHAVE1 = "transcritor_aula_v0";
+  var URL_TRANSFORMERS = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
+  var MODELO_WHISPER = "Xenova/whisper-base";
+  var TAXA = 16000;
+
+  /* ---------- Modelos de instruções para colar no Claude ---------- */
+  var BASE = [
+    "Abaixo está a transcrição bruta de uma reunião, gerada por reconhecimento de voz. Pode haver erros de reconhecimento. Linhas com \"NOTA\" são anotações digitadas pelo usuário; linhas com ★ são momentos que o usuário marcou como importantes; nomes antes dos dois pontos foram marcados manualmente (podem faltar ou estar errados). Não invente fatos nem atribua falas por suposição.",
+    "",
+    "REGRAS: entregue em português do Brasil corrigido (acentuação, crase, concordância, pontuação). Se a reunião estiver em outro idioma, traduza para o português e mantenha em itálico os termos originais importantes. Corrija erros evidentes de reconhecimento usando o contexto; se algo for ambíguo, marque \"(trecho incerto)\". Remova vícios de fala e repetições. Releia tudo no fim procurando erros."
+  ].join("\n");
+
+  var MODELOS = {
+    ata: { nome: "Ata completa (padrão)", p: [
+      "TAREFA: ETL completo da reunião e documento final com as seções:",
+      "- Cabeçalho (título, data, duração aproximada, participantes citados)",
+      "- Resumo executivo (até 8 linhas)",
+      "- Decisões tomadas",
+      "- Pendências e próximos passos (tabela: ação | responsável | prazo)",
+      "- Tópicos discutidos (um bloco por assunto)",
+      "- Números, datas, nomes e valores citados",
+      "- Momentos marcados com ★ (o que foi dito e por que importa)",
+      "- Dúvidas em aberto e trechos incertos",
+      "- Glossário (se houver termos técnicos)"] },
+    executivo: { nome: "Resumo executivo curto", p: [
+      "TAREFA: resumo de no máximo 10 linhas para quem não participou, seguido de 3 a 5 decisões e as pendências mais urgentes."] },
+    vendas: { nome: "Chamada de vendas / cliente", p: [
+      "TAREFA: nota de reunião comercial com: perfil do cliente, dores e necessidades, objeções, interesse (alto/médio/baixo, com o motivo), orçamento e prazo citados, próximos passos com data, riscos e um rascunho curto de e-mail de follow-up."] },
+    entrevista: { nome: "Entrevista / candidato", p: [
+      "TAREFA: resumo estruturado da entrevista: perguntas e respostas principais (formato Q&A), pontos fortes, pontos de atenção, citações marcantes e uma avaliação final objetiva, sem inventar nada."] },
+    aula: { nome: "Aula / palestra", p: [
+      "TAREFA: anotações de estudo com: tema, conceitos-chave com definição, exemplos citados, passo a passo (se houver), 10 perguntas de revisão com respostas e um resumo de 1 parágrafo."] },
+    mapa: { nome: "Mapa mental", p: [
+      "TAREFA: mapa mental da reunião. Entregue (1) um bloco de código Mermaid com `mindmap` (raiz = tema da reunião; ramos = assuntos, decisões, pendências; folhas = detalhes curtos) e (2) o mesmo conteúdo como lista com marcadores indentada, para copiar em qualquer app."] },
+    tarefas: { nome: "Só tarefas e decisões", p: [
+      "TAREFA: extraia apenas (1) decisões, (2) tarefas em tabela (ação | responsável | prazo | prioridade) e (3) pendências sem dono. Se faltar responsável ou prazo, escreva \"não definido\"."] },
+    perguntar: { nome: "Perguntar à reunião", p: [
+      "TAREFA: responda à pergunta do usuário usando SOMENTE a transcrição. Cite o horário [hh:mm:ss] dos trechos usados. Se a resposta não estiver na transcrição, diga que não foi dita."] },
+    livre: { nome: "Só a transcrição (sem tarefa)", p: [
+      "TAREFA: aguarde minha próxima instrução. Por ora, apenas corrija o português da transcrição e devolva o texto limpo, mantendo os horários."] }
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var raiz = $("raiz"), elTexto = $("texto"), elTempo = $("tempo"), elEstado = $("estado"),
+      elPalavras = $("palavras"), elAviso = $("aviso"), btnIniciar = $("btnIniciar");
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var CELULAR = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var TEM_TELA = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !CELULAR;
+
+  /* ---------- Estado e persistência ---------- */
+  var S = { atual: null, reunioes: [], glossario: "", falantes: [], cfg: { lang: "pt-BR", fonte: "mic", motor: "aula", falante: "", vel: "rapido", bloco: 5, aulaMotor: "whisper", modeloW: "base", gauto: true, gmodelo: "" } };
+  var rodando = false, parcial = "", ultimoFinal = "", rec = null;
+  var inicioSessao = 0, base = 0, relogio = null, wake = null;
+
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function hhmmss(s) { s = Math.floor(s); return pad(Math.floor(s / 3600)) + ":" + pad(Math.floor(s % 3600 / 60)) + ":" + pad(s % 60); }
+  function aviso(msg, tipo) { elAviso.textContent = msg || ""; elAviso.className = tipo || ""; }
+  function novoId() { return "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+  function dataCurta(ms) { var d = new Date(ms); return pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+
+  function salvar() { try { localStorage.setItem(CHAVE, JSON.stringify(S)); } catch (e) {} }
+  function novaReuniao() {
+    var m = { id: novoId(), titulo: "Reunião " + dataCurta(Date.now()), criada: Date.now(), decorrido: 0, linhas: [], lixo: false };
+    S.reunioes.push(m); S.atual = m.id; return m;
+  }
+  function cur() {
+    for (var i = 0; i < S.reunioes.length; i++) { if (S.reunioes[i].id === S.atual && !S.reunioes[i].lixo) return S.reunioes[i]; }
+    for (var j = 0; j < S.reunioes.length; j++) { if (!S.reunioes[j].lixo) { S.atual = S.reunioes[j].id; return S.reunioes[j]; } }
+    return novaReuniao();
+  }
+  function carregar() {
+    try {
+      var d = JSON.parse(localStorage.getItem(CHAVE) || "null");
+      if (d && Array.isArray(d.reunioes)) {
+        S.atual = d.atual; S.reunioes = d.reunioes; S.glossario = d.glossario || ""; S.falantes = d.falantes || [];
+        for (var k in S.cfg) { if (d.cfg && d.cfg[k] !== undefined) S.cfg[k] = d.cfg[k]; }
+        return;
+      }
+      var v1 = JSON.parse(localStorage.getItem(CHAVE1) || "null");   // migra a versão antiga (uma única reunião)
+      if (v1 && Array.isArray(v1.linhas) && v1.linhas.length) {
+        var m = novaReuniao(); m.titulo = "Reunião anterior";
+        m.linhas = v1.linhas.map(function (l) { return { t: l.t, s: l.s, f: "", k: "fala" }; });
+        m.decorrido = +v1.decorrido || 0;
+      }
+    } catch (e) {}
+  }
+
+  /* ---------- Texto, glossário, contagem ---------- */
+  function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+  function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function regrasGlossario() {
+    return S.glossario.split("\n").map(function (l) {
+      var i = l.indexOf("="); if (i < 1) return null;
+      var a = l.slice(0, i).trim(), b = l.slice(i + 1).trim();
+      return a ? { re: new RegExp("(^|[^\\p{L}\\p{N}])" + esc(a) + "(?![\\p{L}\\p{N}])", "giu"), b: b } : null;
+    }).filter(Boolean);
+  }
+  function aplicarGlossario(t) {
+    regrasGlossario().forEach(function (r) { t = t.replace(r.re, function (_m, pre) { return pre + r.b; }); });
+    return t;
+  }
+  function linhaTexto(l) {
+    var q = l.f ? l.f + ": " : "";
+    if (l.k === "dest") return "[" + hhmmss(l.t) + "] ★ MOMENTO IMPORTANTE";
+    if (l.k === "nota") return "[" + hhmmss(l.t) + "] NOTA: " + l.s;
+    return "[" + hhmmss(l.t) + "] " + (l.d ? "★ " : "") + q + l.s;
+  }
+  function textoPuro(m) { return (m || cur()).linhas.map(linhaTexto).join("\n"); }
+  function contarPalavras(m) {
+    return m.linhas.reduce(function (n, l) { return n + (l.k === "dest" ? 0 : l.s.split(/\s+/).filter(Boolean).length); }, 0);
+  }
+  function segAgora() { return base + (rodando ? (Date.now() - inicioSessao) / 1000 : 0); }
+
+  function addLinha(txt, t, k, quem) {
+    txt = txt.replace(/\s+/g, " ").trim();
+    if (!txt && k !== "dest") return;
+    if (k !== "nota" && k !== "dest") txt = aplicarGlossario(cap(txt));
+    var m = cur();
+    m.linhas.push({ t: t == null ? segAgora() : t, s: txt, f: (k === "nota" || k === "dest") ? "" : (quem || S.cfg.falante), k: k || "fala" });
+    m.decorrido = Math.max(m.decorrido, segAgora());
+    salvar();
+  }
+
+  /* ---------- Desenho ---------- */
+  function desenhar() {
+    var m = cur();
+    $("tituloAtual").textContent = m.titulo;
+    elTexto.textContent = "";
+    if (!m.linhas.length && !parcial) {
+      var v = document.createElement("span"); v.className = "vazio";
+      v.textContent = "O texto aparece aqui enquanto a reunião acontece.";
+      elTexto.appendChild(v);
+    }
+    m.linhas.forEach(function (l, i) {
+      var p = document.createElement("p");
+      p.className = "linha" + (l.d || l.k === "dest" ? " dest" : "") + (l.k === "nota" ? " nota" : "");
+      var h = document.createElement("span"); h.className = "hora"; h.textContent = hhmmss(l.t); p.appendChild(h);
+      if (l.k === "dest") {
+        var e = document.createElement("span"); e.className = "estrela"; e.textContent = "★ Momento marcado"; p.appendChild(e);
+      } else {
+        if (l.d) { var s2 = document.createElement("span"); s2.className = "estrela"; s2.textContent = "★ "; p.appendChild(s2); }
+        if (l.k === "nota") { var n = document.createElement("b"); n.textContent = "Nota: "; p.appendChild(n); }
+        else if (l.f) {
+          var q = document.createElement("span"); q.className = "quem"; q.textContent = l.f + ":"; q.dataset.i = i; q.title = "Trocar falante"; p.appendChild(q);
+        } else if (S.falantes.length && l.k === "fala") {
+          var q2 = document.createElement("span"); q2.className = "quem"; q2.textContent = "[quem?]"; q2.dataset.i = i; q2.style.fontWeight = "400"; p.appendChild(q2);
+        }
+        p.appendChild(document.createTextNode(l.s));
+      }
+      p.dataset.i = i;
+      elTexto.appendChild(p);
+    });
+    if (parcial) {
+      var pp = document.createElement("p"); pp.className = "linha parcial"; pp.textContent = parcial; elTexto.appendChild(pp);
+    }
+    elTexto.scrollTop = elTexto.scrollHeight;
+    var c = contarPalavras(m);
+    elPalavras.textContent = c + (c === 1 ? " palavra" : " palavras");
+    desenharEtl();
+    btnIniciar.dataset.on = rodando ? "true" : "false";
+    btnIniciar.textContent = rodando ? "Parar transcrição" : (m.linhas.length ? "Retomar transcrição" : "Iniciar transcrição");
+  }
+
+  elTexto.addEventListener("click", function (ev) {
+    var alvo = ev.target, m = cur();
+    var q = alvo.closest && alvo.closest(".quem");
+    var p = alvo.closest && alvo.closest(".linha");
+    if (!p || p.dataset.i === undefined) return;
+    var l = m.linhas[+p.dataset.i]; if (!l) return;
+    if (q) {                                           // cicla o falante da linha
+      var lista = [""].concat(S.falantes), pos = lista.indexOf(l.f || "");
+      l.f = lista[(pos + 1) % lista.length];
+    } else if (l.k !== "dest") { l.d = !l.d; }          // marca/desmarca ★
+    else { m.linhas.splice(+p.dataset.i, 1); }
+    salvar(); desenhar();
+  });
+
+  function tick() { elTempo.textContent = hhmmss(segAgora()); }
+
+  /* ---------- Motor 1: reconhecimento do Chrome (só microfone) ---------- */
+  function criarRec() {
+    var r = new SR();
+    r.lang = S.cfg.lang; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+    r.onresult = function (ev) {
+      var interino = "";
+      for (var i = ev.resultIndex; i < ev.results.length; i++) {
+        var res = ev.results[i];
+        if (res.isFinal) { finalChrome(res[0].transcript); } else { interino += res[0].transcript; }
+      }
+      parcial = interino.trim(); desenhar();
+    };
+    r.onerror = function (ev) {
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+        aviso("Microfone bloqueado. Permita o microfone para este site nas configurações do navegador.", "erro"); parar(true);
+      } else if (ev.error === "audio-capture") { aviso("Nenhum microfone encontrado.", "erro"); parar(true); }
+      else if (ev.error === "network") { aviso("Sem internet para reconhecer a fala. Tentando de novo...", "atencao"); }
+    };
+    r.onend = function () {
+      if (parcial) { finalChrome(parcial); parcial = ""; desenhar(); }
+      if (rodando && S.cfg.motor === "chrome") { setTimeout(function () { if (rodando) { try { r.start(); } catch (e) {} } }, 250); }
+    };
+    return r;
+  }
+  function finalChrome(txt) {
+    txt = txt.replace(/\s+/g, " ").trim();
+    if (!txt || txt === ultimoFinal) return;           // evita repetição comum no Chrome do Android
+    ultimoFinal = txt; addLinha(txt);
+  }
+
+  /* ---------- Motor 2: Whisper local (qualquer fonte de áudio, quase em tempo real) ---------- */
+  // Velocidade: pedaços menores e modelo menor = texto aparece mais rápido; pedaços maiores e modelo maior = mais preciso.
+  var VEL = {
+    rapido:      { nome: "Tempo real",   min: 2.5, pausa: 0.5, max: 8,  modelo: "Xenova/whisper-tiny" },
+    equilibrado: { nome: "Equilibrado",            min: 5,   pausa: 0.7, max: 15, modelo: "Xenova/whisper-base" },
+    preciso:     { nome: "Preciso",   min: 8,   pausa: 0.9, max: 25, modelo: "Xenova/whisper-small" }
+  };
+  var asrs = {}, carregando = {}, actx = null, fluxos = [], segs = [], fila = Promise.resolve(), pendentes = 0;
+
+  function velAtual() { return VEL[S.cfg.vel] || VEL.rapido; }
+  function carregarModelo(nome) {
+    if (asrs[nome]) return Promise.resolve(asrs[nome]);
+    if (carregando[nome]) return carregando[nome];
+    aviso("Baixando o modelo de voz (só na primeira vez; fica guardado no navegador)...", "atencao");
+    carregando[nome] = import(URL_TRANSFORMERS).then(function (mod) {
+      return mod.pipeline("automatic-speech-recognition", nome, {
+        progress_callback: function (p) { if (p && p.status === "progress" && rodando) { aviso("Baixando modelo de voz: " + Math.round(p.progress) + "%", "atencao"); } }
+      });
+    }).then(function (p) { asrs[nome] = p; if (rodando) aviso("Modelo pronto. O texto aparece poucos segundos depois da fala.", "ok"); return p; })
+      .catch(function (e) { carregando[nome] = null; throw e; });
+    return carregando[nome];
+  }
+
+  var ALUCINACOES = /^(obrigad[oa][.!]?|legendas? pela comunidade.*|thanks for watching[.!]?|thank you[.!]?|you|\.+|\[.*\]|\(.*\)|♪.*)$/i;
+
+  function novoSeg(tag) { return { tag: tag, pedacos: [], tam: 0, silencio: 0, ini: 0 }; }
+
+  function enviarPedaco(sg) {
+    if (!sg.tam) return;
+    var dados = new Float32Array(sg.tam), o = 0;
+    sg.pedacos.forEach(function (b) { dados.set(b, o); o += b.length; });
+    var t0 = sg.ini, tag = sg.tag, nomeModelo = velAtual().modelo;
+    sg.pedacos = []; sg.tam = 0; sg.silencio = 0;
+    if (dados.length < TAXA * 0.8) return;
+    pendentes++;
+    if (pendentes > 3) aviso("A transcrição está atrasada em relação à fala. Troque a velocidade para \"Tempo real\" ou use o motor Chrome se for só microfone.", "atencao");
+    var lang = S.cfg.lang === "en-US" ? "english" : "portuguese";
+    fila = fila.then(function () { return carregarModelo(nomeModelo); }).then(function (m) {
+      return m(dados, { language: lang, task: "transcribe" });
+    }).then(function (r) {
+      var txt = ((r && r.text) || "").trim();
+      if (txt && !ALUCINACOES.test(txt)) { addLinha(txt, t0, "fala", tag); desenhar(); }
+    }).catch(function (e) {
+      aviso("Falha no Whisper: " + (e && e.message ? e.message : e), "erro");
+    }).then(function () { pendentes--; });
+  }
+
+  function aoReceberAudio(sg, ev) {
+    var entrada = ev.inputBuffer.getChannelData(0), n = entrada.length, soma = 0, i, v = velAtual();
+    for (i = 0; i < n; i++) soma += entrada[i] * entrada[i];
+    var rms = Math.sqrt(soma / n), falando = rms > 0.012;
+    if (!sg.tam && !falando) return;                   // descarta silêncio inicial
+    if (!sg.tam) sg.ini = segAgora();
+    sg.pedacos.push(new Float32Array(entrada)); sg.tam += n;
+    sg.silencio = falando ? 0 : sg.silencio + n;
+    if ((sg.tam >= TAXA * v.min && sg.silencio >= TAXA * v.pausa) || sg.tam >= TAXA * v.max) enviarPedaco(sg);
+  }
+
+  // Devolve [{ stream, tag }]. Com "Reunião + meu microfone", cada fonte vira um falante automático.
+  async function abrirFluxos() {
+    var lista = [], ambos = S.cfg.fonte === "ambos";
+    if (S.cfg.fonte === "mic" || ambos) {
+      lista.push({ stream: await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }), tag: ambos ? "Eu" : "" });
+    }
+    if (S.cfg.fonte === "tela" || ambos) {
+      var tela;
+      try { tela = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }); }
+      catch (e) { lista.forEach(function (x) { x.stream.getTracks().forEach(function (t) { t.stop(); }); }); throw e; }
+      tela.getVideoTracks().forEach(function (t) { t.stop(); });   // só o áudio interessa
+      if (!tela.getAudioTracks().length) {
+        lista.forEach(function (x) { x.stream.getTracks().forEach(function (t) { t.stop(); }); });
+        throw new Error("sem-audio-tela");
+      }
+      tela.getAudioTracks()[0].addEventListener("ended", function () { if (rodando) { aviso("O compartilhamento de áudio foi encerrado.", "atencao"); parar(false); } });
+      lista.push({ stream: tela, tag: ambos ? "Participantes" : "" });
+    }
+    return lista;
+  }
+
+  async function iniciarWhisper() {
+    fluxos = await abrirFluxos();
+    actx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TAXA });
+    segs = [];
+    fluxos.forEach(function (f) {
+      var sg = novoSeg(f.tag), p = actx.createScriptProcessor(4096, 1, 1);
+      sg.proc = p; segs.push(sg);
+      p.onaudioprocess = function (ev) { aoReceberAudio(sg, ev); };
+      actx.createMediaStreamSource(f.stream).connect(p);
+      p.connect(actx.destination);                     // necessário para o processador funcionar; sem eco (a entrada não é repassada)
+    });
+    carregarModelo(velAtual().modelo).catch(function (e) { aviso("Não consegui baixar o modelo de voz: " + (e && e.message ? e.message : e), "erro"); });
+  }
+  function pararWhisper() {
+    segs.forEach(function (sg) {
+      try { enviarPedaco(sg); } catch (e) {}
+      try { sg.proc.disconnect(); sg.proc.onaudioprocess = null; } catch (e) {}
+    });
+    try { if (actx) actx.close(); } catch (e) {}
+    fluxos.forEach(function (f) { f.stream.getTracks().forEach(function (t) { t.stop(); }); });
+    actx = null; fluxos = []; segs = [];
+  }
+
+  /* ---------- Motor 3: MODO AULA (grava em blocos, transcreve cada bloco e apaga o áudio) ---------- */
+  var GKEY = "transcritor_aula_gemini", GMODELO_PADRAO = "gemini-2.5-flash";
+  var MODELOS_W = { tiny: "Xenova/whisper-tiny", base: "Xenova/whisper-base", small: "Xenova/whisper-small" };
+  var AULA = { atual: null, streams: [], actx: null, dest: null, analyser: null, buf: null, mime: "", mid: null, seq: 0, silMs: 0, fechando: 0,
+               timerVad: null, timerSalva: null, timerStatus: null, fila: [], processando: false, concluidos: 0, bytes: 0, ratio: 0, lentos: 0,
+               soWasm: false, worker: null, workerModelo: "", workerDevice: "", pronto: null, pend: {}, tid: 0, aoVazio: [], banco: null, memoria: {} };
+
+  function lerChave() { try { return (localStorage.getItem(GKEY) || "").trim(); } catch (e) { return ""; } }
+  function motorBloco() { return S.cfg.aulaMotor === "gemini" ? "gemini" : "whisper"; }
+  function esperar(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
+
+  /* Banco do navegador (IndexedDB): guarda só os blocos de áudio que ainda não viraram texto. Sem banco, usa a memória. */
+  function abrirBanco() {
+    if (AULA.banco) return AULA.banco;
+    AULA.banco = new Promise(function (ok) {
+      try {
+        var rq = indexedDB.open("transcritor_aula", 1);
+        rq.onupgradeneeded = function () { rq.result.createObjectStore("blocos", { keyPath: "id" }); };
+        rq.onsuccess = function () { ok(rq.result); };
+        rq.onerror = function () { ok(null); };
+      } catch (e) { ok(null); }
+    });
+    return AULA.banco;
+  }
+  function dbOp(modo, fn) {
+    return abrirBanco().then(function (db) {
+      if (!db) return null;
+      return new Promise(function (ok) {
+        try {
+          var tx = db.transaction("blocos", modo), r = fn(tx.objectStore("blocos"));
+          tx.oncomplete = function () { ok(r && r.result !== undefined ? r.result : true); };
+          tx.onerror = tx.onabort = function () { ok(null); };
+        } catch (e) { ok(null); }
+      });
+    });
+  }
+  function dbPut(b) { return abrirBanco().then(function (db) { if (!db) { AULA.memoria[b.id] = b; return true; } return dbOp("readwrite", function (st) { return st.put(b); }); }); }
+  function dbGet(id) { return abrirBanco().then(function (db) { if (!db) return AULA.memoria[id] || null; return dbOp("readonly", function (st) { return st.get(id); }).then(function (r) { return r && r !== true ? r : null; }); }); }
+  function dbDel(id) { delete AULA.memoria[id]; return dbOp("readwrite", function (st) { return st.delete(id); }); }
+  function dbTodos() {
+    return abrirBanco().then(function (db) {
+      if (!db) return Object.keys(AULA.memoria).map(function (k) { return AULA.memoria[k]; });
+      return dbOp("readonly", function (st) { return st.getAll(); }).then(function (r) { return Array.isArray(r) ? r : []; });
+    });
+  }
+
+  /* Captura: microfone, aba (computador) ou os dois, misturados em uma só trilha */
+  function mimeAula() {
+    var c = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"];
+    for (var i = 0; i < c.length; i++) { try { if (MediaRecorder.isTypeSupported(c[i])) return c[i]; } catch (e) {} }
+    return "";
+  }
+  async function abrirFluxosAula() {
+    var lista = [];
+    if (S.cfg.fonte === "mic" || S.cfg.fonte === "ambos") {
+      lista.push(await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true } }));
+    }
+    if (S.cfg.fonte === "tela" || S.cfg.fonte === "ambos") {
+      var tela;
+      try { tela = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }); }
+      catch (e) { lista.forEach(function (s) { s.getTracks().forEach(function (t) { t.stop(); }); }); throw e; }
+      tela.getVideoTracks().forEach(function (t) { t.stop(); });
+      if (!tela.getAudioTracks().length) {
+        lista.forEach(function (s) { s.getTracks().forEach(function (t) { t.stop(); }); });
+        throw new Error("sem-audio-tela");
+      }
+      tela.getAudioTracks()[0].addEventListener("ended", function () { if (rodando) { aviso("O compartilhamento de áudio foi encerrado.", "atencao"); parar(false); } });
+      lista.push(tela);
+    }
+    return lista;
+  }
+
+  async function iniciarAula() {
+    if (typeof MediaRecorder === "undefined") throw new Error("Este navegador não grava áudio. Use o Chrome.");
+    AULA.mime = mimeAula();
+    AULA.streams = await abrirFluxosAula();
+    AULA.actx = new (window.AudioContext || window.webkitAudioContext)();
+    try { await AULA.actx.resume(); } catch (e) {}
+    AULA.dest = AULA.actx.createMediaStreamDestination();
+    AULA.analyser = AULA.actx.createAnalyser(); AULA.analyser.fftSize = 1024; AULA.buf = new Float32Array(1024);
+    AULA.streams.forEach(function (f) { var src = AULA.actx.createMediaStreamSource(f); src.connect(AULA.dest); src.connect(AULA.analyser); });
+    AULA.mid = cur().id; AULA.seq = 0; AULA.silMs = 0;
+    abrirNovoRecorder();
+    AULA.timerVad = setInterval(vigiaCorte, 100);
+    AULA.timerSalva = setInterval(salvarParcial, 15000);
+    AULA.timerStatus = setInterval(statusAula, 1000);
+    if (motorBloco() === "whisper") garantirWorker().catch(function (e) { aviso("Não consegui preparar o Whisper: " + (e && e.message ? e.message : e), "erro"); });
+    statusAula();
+  }
+
+  function abrirNovoRecorder() {
+    var partes = [], id = "b" + Date.now().toString(36) + (++AULA.seq);
+    var opc = { audioBitsPerSecond: 24000 }; if (AULA.mime) opc.mimeType = AULA.mime;
+    var r = new MediaRecorder(AULA.dest.stream, opc);
+    var b = { id: id, mid: AULA.mid, ini: segAgora(), partes: partes, rec: r, fim: 0 };
+    r.ondataavailable = function (ev) { if (ev.data && ev.data.size) partes.push(ev.data); };
+    r.onstop = function () { b.fim = segAgora(); finalizarBloco(b); };
+    r.start(1000);
+    AULA.atual = b; return b;
+  }
+
+  // Corta no "ponto final": passou do tempo do bloco e houve ~1 s de silêncio (ou passou 1 min do alvo).
+  function vigiaCorte() {
+    if (!AULA.atual) return;
+    AULA.analyser.getFloatTimeDomainData(AULA.buf);
+    var s = 0, i; for (i = 0; i < AULA.buf.length; i++) s += AULA.buf[i] * AULA.buf[i];
+    AULA.silMs = Math.sqrt(s / AULA.buf.length) > 0.008 ? 0 : AULA.silMs + 100;
+    var dur = segAgora() - AULA.atual.ini, alvo = (S.cfg.bloco || 5) * 60;
+    if ((dur >= alvo && AULA.silMs >= 1000) || dur >= alvo + 60) cortarBloco();
+  }
+  function cortarBloco() {          // o novo gravador abre ANTES de fechar o velho: nenhuma fala fica sem gravar
+    var velho = AULA.atual; AULA.fechando++;
+    abrirNovoRecorder(); AULA.silMs = 0;
+    try { velho.rec.stop(); } catch (e) { AULA.fechando--; }
+  }
+  function salvarParcial() {        // se a página cair, o bloco em andamento sobrevive (até 15 s de perda)
+    var b = AULA.atual; if (!b || !b.partes.length) return;
+    dbPut({ id: b.id, mid: b.mid, ini: b.ini, dur: Math.max(1, segAgora() - b.ini), blob: new Blob(b.partes, { type: AULA.mime || "audio/webm" }), aberto: true, tent: 0 });
+  }
+  function finalizarBloco(b) {
+    var blob = new Blob(b.partes, { type: AULA.mime || "audio/webm" });
+    b.partes = [];
+    if (blob.size < 2000) { dbDel(b.id); AULA.fechando = Math.max(0, AULA.fechando - 1); verificarVazio(); return; }
+    var reg = { id: b.id, mid: b.mid, ini: b.ini, dur: Math.max(1, b.fim - b.ini), blob: blob, tent: 0 };
+    AULA.bytes += blob.size;
+    dbPut(reg).then(function () {
+      AULA.fechando = Math.max(0, AULA.fechando - 1);
+      if (AULA.fila.indexOf(reg.id) < 0) AULA.fila.push(reg.id);
+      processarFila();
+    });
+  }
+
+  /* Fila: transcreve um bloco por vez; só apaga o áudio depois de salvar o texto */
+  async function processarFila() {
+    if (AULA.processando) return;
+    AULA.processando = true;
+    try {
+      while (AULA.fila.length) {
+        var id = AULA.fila[0], reg = await dbGet(id);
+        if (!reg) { AULA.fila.shift(); continue; }
+        var t0 = performance.now(), ok = false, erro = "";
+        try { ok = await transcreverBloco(reg); } catch (e) { erro = e && e.message ? e.message : String(e); }
+        if (ok) {
+          AULA.fila.shift(); await dbDel(id);
+          AULA.bytes = Math.max(0, AULA.bytes - reg.blob.size); AULA.concluidos++;
+          medirVelocidade((performance.now() - t0) / 1000, reg.dur);
+        } else {
+          reg.tent = (reg.tent || 0) + 1; await dbPut(reg);
+          aviso("Falha ao transcrever um bloco (" + erro + "). O áudio foi mantido; nova tentativa em instantes.", "atencao");
+          if (reg.tent >= 3) { AULA.fila.shift(); aviso("O bloco falhou 3 vezes e o áudio foi mantido. Use \"Processar blocos pendentes\" depois de resolver (internet, chave, modelo).", "erro"); mostrarPendentes(); }
+          else { AULA.fila.push(AULA.fila.shift()); await esperar(5000 * reg.tent); }
+        }
+        statusAula();
+      }
+    } finally { AULA.processando = false; }
+    statusAula(); verificarVazio();
+  }
+  function aulaEmUso() { return !!(AULA.atual || AULA.fila.length || AULA.processando || AULA.fechando); }
+  function verificarVazio() { if (!aulaEmUso()) { AULA.aoVazio.splice(0).forEach(function (f) { try { f(); } catch (e) {} }); } }
+  function aulaAoVazio(fn) { AULA.aoVazio.push(fn); verificarVazio(); }
+
+  async function transcreverBloco(reg) {
+    var audio = await decodificar(reg.blob), itens;
+    itens = audio.length < 8000 ? [] : (motorBloco() === "gemini" ? await transcreverGemini(audio) : await transcreverWhisperBloco(audio));
+    anexarTexto(reg, itens);
+    return true;
+  }
+  async function decodificar(blob) {      // blob (opus) -> Float32 mono 16 kHz
+    var buf = await blob.arrayBuffer();
+    var oc = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 16000, 16000);
+    var ab = await oc.decodeAudioData(buf), n = ab.length, ch = ab.numberOfChannels, out = new Float32Array(n), c, i;
+    for (c = 0; c < ch; c++) { var d = ab.getChannelData(c); for (i = 0; i < n; i++) out[i] += d[i] / ch; }
+    return out;
+  }
+  function anexarTexto(reg, itens) {
+    var m = null, i;
+    for (i = 0; i < S.reunioes.length; i++) { if (S.reunioes[i].id === reg.mid) m = S.reunioes[i]; }
+    if (!m) m = cur();
+    var ant = "";
+    itens.forEach(function (it) {
+      var txt = (it.s || "").replace(/\s+/g, " ").trim();
+      if (!txt || ALUCINACOES.test(txt) || txt.toLowerCase() === ant) return;
+      ant = txt.toLowerCase();
+      m.linhas.push({ t: reg.ini + (it.t || 0), s: aplicarGlossario(cap(txt)), f: it.f || "", k: "fala" });
+    });
+    m.decorrido = Math.max(m.decorrido, reg.ini + reg.dur);
+    salvar(); desenhar();
+  }
+
+  /* Whisper no celular (em um Worker, para não travar a tela). Tenta WebGPU e cai para WASM. */
+  var WORKER_SRC = [
+    'import { pipeline } from "__URL__";',
+    'let asr = null, dev = "wasm", nome = "";',
+    'const prog = p => { if (p && p.status === "progress") self.postMessage({ tipo: "prog", p: Math.round(p.progress) }); };',
+    'async function carregar(modelo, modo) {',
+    '  let ad = null; try { if (modo !== "wasm" && self.navigator && navigator.gpu) ad = await navigator.gpu.requestAdapter(); } catch (e) { ad = null; }',
+    '  if (ad) {',
+    '    try { const p = await pipeline("automatic-speech-recognition", modelo, { device: "webgpu", dtype: { encoder_model: "fp32", decoder_model_merged: "q4" }, progress_callback: prog }); dev = "webgpu"; return p; } catch (e) { throw new Error("__gpu__"); }',
+    '  }',
+    '  dev = "wasm"; return await pipeline("automatic-speech-recognition", modelo, { dtype: "q8", progress_callback: prog });',
+    '}',
+    'self.onmessage = async (e) => { const m = e.data;',
+    '  try {',
+    '    if (m.tipo === "carregar") { nome = m.modelo; asr = await carregar(nome, m.modo); self.postMessage({ tipo: "pronto", device: dev }); }',
+    '    else if (m.tipo === "transcrever") {',
+    '      const opc = { language: m.lang, task: "transcribe", chunk_length_s: 30, stride_length_s: 5, return_timestamps: true };',
+    '      let r; try { r = await asr(m.audio, opc); } catch (err) { throw new Error(dev === "webgpu" ? "__gpu__" : ((err && err.message) || String(err))); }',
+    '      self.postMessage({ tipo: "texto", id: m.id, device: dev, chunks: r.chunks && r.chunks.length ? r.chunks : [{ timestamp: [0, null], text: r.text || "" }] });',
+    '    }',
+    '  } catch (err) { self.postMessage({ tipo: "erro", id: m.id || null, msg: String((err && err.message) || err) }); }',
+    '};'
+  ].join("\n");
+
+  function garantirWorker() {
+    var nome = MODELOS_W[S.cfg.modeloW] || MODELOS_W.base;
+    if (AULA.worker && AULA.workerModelo === nome && AULA.pronto) return AULA.pronto;
+    if (AULA.worker) { try { AULA.worker.terminate(); } catch (e) {} AULA.worker = null; }
+    AULA.workerModelo = nome; AULA.pend = {};
+    var w = new Worker(URL.createObjectURL(new Blob([WORKER_SRC.replace("__URL__", URL_TRANSFORMERS)], { type: "text/javascript" })), { type: "module" });
+    AULA.worker = w;
+    AULA.pronto = new Promise(function (ok, err) {
+      w.onmessage = function (ev) {
+        var m = ev.data;
+        if (m.tipo === "prog") { if (rodando || AULA.processando) aviso("Baixando o modelo de voz: " + m.p + "% (só na primeira vez)", "atencao"); }
+        else if (m.tipo === "pronto") { AULA.workerDevice = m.device; statusAula(); ok(w); }
+        else if (m.tipo === "texto" || m.tipo === "erro") {
+          if (m.device) AULA.workerDevice = m.device;
+          var p = AULA.pend[m.id];
+          if (p) { delete AULA.pend[m.id]; if (m.tipo === "texto") p.ok(m.chunks); else p.err(new Error(m.msg)); }
+          else if (m.tipo === "erro") err(new Error(m.msg));
+        }
+      };
+      w.onerror = function (e) { err(new Error((e && e.message) || "o Whisper não iniciou (sem internet?)")); };
+      w.postMessage({ tipo: "carregar", modelo: nome, modo: AULA.soWasm ? "wasm" : "auto" });
+    }).catch(function (e) {
+      AULA.pronto = null; try { w.terminate(); } catch (x) {} if (AULA.worker === w) AULA.worker = null;
+      if (e && e.message === "__gpu__" && !AULA.soWasm) { AULA.soWasm = true; return garantirWorker(); }   // a GPU falhou: recomeça só com WASM
+      throw e;
+    });
+    return AULA.pronto;
+  }
+  async function transcreverWhisperBloco(audio) {
+    var w = await garantirWorker(), id = "t" + (++AULA.tid), chunks;
+    try {
+      chunks = await new Promise(function (ok, err) {
+        AULA.pend[id] = { ok: ok, err: err };
+        var copia = new Float32Array(audio);     // cópia: se a GPU falhar, o áudio original ainda serve para a nova tentativa
+        w.postMessage({ tipo: "transcrever", id: id, audio: copia, lang: S.cfg.lang === "en-US" ? "english" : "portuguese" }, [copia.buffer]);
+      });
+    } catch (e) {
+      if (e && e.message === "__gpu__" && !AULA.soWasm) { AULA.soWasm = true; AULA.pronto = null; try { AULA.worker.terminate(); } catch (x) {} AULA.worker = null; return transcreverWhisperBloco(audio); }
+      throw e;
+    }
+    return chunks.map(function (c) { return { t: (c.timestamp && c.timestamp[0]) || 0, s: (c.text || "").trim() }; }).filter(function (x) { return x.s; });
+  }
+
+  /* Gemini (alternativa): manda o bloco em WAV 16 kHz e recebe texto com horários */
+  function pcmParaWav(f32) {
+    var n = f32.length, b = new ArrayBuffer(44 + n * 2), v = new DataView(b), i;
+    function s(o, t) { for (var k = 0; k < t.length; k++) v.setUint8(o + k, t.charCodeAt(k)); }
+    s(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); s(8, "WAVE"); s(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); s(36, "data"); v.setUint32(40, n * 2, true);
+    for (i = 0; i < n; i++) { var x = Math.max(-1, Math.min(1, f32[i])); v.setInt16(44 + i * 2, x < 0 ? x * 32768 : x * 32767, true); }
+    return b;
+  }
+  function paraBase64(buf) {
+    return new Promise(function (ok, err) { var fr = new FileReader(); fr.onload = function () { ok(String(fr.result).split(",")[1]); }; fr.onerror = err; fr.readAsDataURL(new Blob([buf], { type: "audio/wav" })); });
+  }
+  async function transcreverGemini(audio) {
+    var chave = lerChave();
+    if (!chave) throw new Error("falta a chave do Gemini nos ajustes do modo aula");
+    var idioma = S.cfg.lang === "en-US" ? "inglês" : "português do Brasil";
+    var prompt = "Transcreva fielmente este áudio em " + idioma + ". Não resuma, não traduza e não invente nada; se um trecho for inaudível, omita. " +
+      "Devolva uma lista de parágrafos curtos. Para cada um: t = segundos desde o início deste áudio, f = rótulo do falante (\"Falante 1\", \"Falante 2\"... só se houver mais de uma voz; senão vazio), s = o texto, com pontuação e acentos corretos. Se não houver fala, devolva [].";
+    var corpo = {
+      contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "audio/wav", data: await paraBase64(pcmParaWav(audio)) } }] }],
+      generationConfig: { temperature: 0, responseMimeType: "application/json",
+        responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { t: { type: "NUMBER" }, f: { type: "STRING" }, s: { type: "STRING" } }, required: ["t", "s"] } } }
+    };
+    var r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(S.cfg.gmodelo || GMODELO_PADRAO) + ":generateContent",
+      { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": chave }, body: JSON.stringify(corpo) });
+    if (!r.ok) { var tx = await r.text(); throw new Error("Gemini " + r.status + ": " + tx.slice(0, 140)); }
+    var j = await r.json(), p = ((((j.candidates || [])[0] || {}).content || {}).parts || [])[0], txt = p && p.text;
+    if (!txt) return [];
+    var arr; try { arr = JSON.parse(txt); } catch (e) { arr = [{ t: 0, s: txt }]; }
+    return (Array.isArray(arr) ? arr : []).filter(function (x) { return x && x.s; }).map(function (x) { return { t: +x.t || 0, s: String(x.s).trim(), f: x.f ? String(x.f).trim() : "" }; });
+  }
+
+  /* Se o Whisper não acompanha (bloco leva mais tempo para transcrever do que para gravar): troca sozinho */
+  function medirVelocidade(procS, durS) {
+    AULA.ratio = procS / Math.max(durS, 1);
+    if (motorBloco() === "whisper" && (AULA.ratio > 0.9 || AULA.fila.length > 3)) AULA.lentos++; else AULA.lentos = 0;
+    if (AULA.lentos >= 2) reagirLento();
+  }
+  function reagirLento() {
+    AULA.lentos = 0;
+    if (lerChave() && S.cfg.gauto !== false) {
+      S.cfg.aulaMotor = "gemini"; salvar(); atualizarConfig();
+      aviso("O Whisper ficou lento neste aparelho. Troquei para o Gemini (nuvem).", "atencao");
+    } else if (S.cfg.modeloW !== "tiny") {
+      S.cfg.modeloW = "tiny"; salvar(); atualizarConfig();
+      aviso("O Whisper ficou lento. Troquei para o modelo mais leve (tiny). Para mais qualidade, configure o Gemini nos ajustes do modo aula.", "atencao");
+    } else {
+      aviso("O Whisper não acompanha neste aparelho. Configure o Gemini nos ajustes do modo aula.", "erro");
+    }
+  }
+
+  function pararAula() {
+    clearInterval(AULA.timerVad); clearInterval(AULA.timerSalva); clearInterval(AULA.timerStatus);
+    var b = AULA.atual; AULA.atual = null;
+    if (b) { AULA.fechando++; try { b.rec.stop(); } catch (e) { AULA.fechando--; } }
+    var fl = AULA.streams, ac = AULA.actx; AULA.streams = []; AULA.actx = null;
+    setTimeout(function () { try { fl.forEach(function (f) { f.getTracks().forEach(function (t) { t.stop(); }); }); if (ac) ac.close(); } catch (e) {} }, 500);
+    statusAula();
+  }
+
+  function statusAula() {
+    var el = $("aulaStatus"); if (!el) return;
+    var l = [];
+    if (AULA.atual) l.push("Gravando o bloco " + AULA.seq + " · " + hhmmss(segAgora() - AULA.atual.ini));
+    l.push("Na fila: " + AULA.fila.length + (AULA.processando ? " (transcrevendo agora)" : "") + " · Concluídos: " + AULA.concluidos);
+    l.push("Áudio guardado aguardando texto: " + (AULA.bytes / 1048576).toFixed(1) + " MB");
+    if (AULA.ratio) l.push("Velocidade: " + AULA.ratio.toFixed(2) + "x (abaixo de 1 acompanha a aula)");
+    l.push("Motor: " + (motorBloco() === "gemini" ? "Gemini" : "Whisper " + (S.cfg.modeloW || "base") + (AULA.workerDevice ? " (" + AULA.workerDevice + ")" : "")));
+    el.textContent = l.join("\n");
+  }
+
+  /* Blocos que sobraram de uma sessão anterior (queda de energia, aba fechada, falha repetida) */
+  function mostrarPendentes() {
+    dbTodos().then(function (lista) {
+      var n = lista.length, mb = lista.reduce(function (a, r) { return a + (r.blob ? r.blob.size : 0); }, 0) / 1048576;
+      $("btnPendentes").hidden = !n;
+      $("btnPendentes").textContent = "Processar " + n + " bloco" + (n === 1 ? "" : "s") + " pendente" + (n === 1 ? "" : "s") + " (" + mb.toFixed(1) + " MB)";
+    });
+  }
+  $("btnPendentes").addEventListener("click", function () {
+    dbTodos().then(function (lista) {
+      lista.sort(function (a, b) { return a.ini - b.ini; }).forEach(function (r) { r.tent = 0; if (AULA.fila.indexOf(r.id) < 0) AULA.fila.push(r.id); });
+      aviso("Processando " + lista.length + " bloco(s) pendente(s)...", "atencao"); processarFila();
+      aulaAoVazio(function () { mostrarPendentes(); aviso("Blocos pendentes concluídos.", "ok"); if (cur().linhas.length) rodarEtl(true); });
+    });
+  });
+  if (location.search.indexOf("teste") >= 0) { window.__aula = { AULA: AULA, todos: dbTodos, transcrever: transcreverBloco, finalizar: function (blob, ini, dur) { var b = { id: "teste" + Date.now(), mid: cur().id, ini: ini || 0, fim: (ini || 0) + (dur || 10), partes: [blob] }; AULA.fechando++; finalizarBloco(b); } }; }
+
+  /* ---------- Iniciar / parar ---------- */
+  async function pedirTelaLigada() {
+    try { if (navigator.wakeLock) { wake = await navigator.wakeLock.request("screen"); } } catch (e) { wake = null; }
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (rodando && document.visibilityState === "visible") { pedirTelaLigada(); }
+    if (rodando && document.visibilityState === "hidden") {
+      aviso("A tela foi desligada ou o navegador saiu do primeiro plano: a transcrição pode ter parado.", "atencao");
+    }
+  });
+
+  async function iniciar() {
+    var cfg = S.cfg, m = cur();
+    if (cfg.motor === "chrome" && cfg.fonte !== "mic") cfg.motor = "whisper";
+    if (cfg.motor === "chrome" && !SR) { aviso("Este navegador não tem reconhecimento de voz do Chrome. Troque o motor para Whisper local.", "erro"); return; }
+    if (cfg.fonte !== "mic" && !TEM_TELA) { aviso("Este aparelho não consegue capturar o áudio interno. Use o microfone.", "erro"); return; }
+    base = m.decorrido; inicioSessao = Date.now(); ultimoFinal = ""; parcial = ""; rodando = true;
+    raiz.classList.add("gravando");
+    try {
+      if (cfg.motor === "chrome") {
+        rec = criarRec(); rec.start();
+        aviso("Transcrevendo. Mantenha a tela ligada.", "ok");
+      } else if (cfg.motor === "aula") {
+        aviso("Iniciando o modo aula...", "atencao");
+        await iniciarAula();
+        aviso("Gravando em blocos de " + (cfg.bloco || 5) + " min. Mantenha a tela ligada e o celular na tomada.", "ok");
+      } else {
+        aviso("Iniciando...", "atencao");
+        await iniciarWhisper();
+        if (!asrs[velAtual().modelo]) aviso("Preparando o modelo de voz...", "atencao");
+      }
+    } catch (e) {
+      rodando = false; raiz.classList.remove("gravando"); pararWhisper(); pararAula();
+      var msg = e && e.message === "sem-audio-tela" ? "Nenhum áudio foi compartilhado. Na janela do navegador, escolha a aba e marque \"Compartilhar áudio\"."
+        : e && e.name === "NotAllowedError" ? "Permissão negada (microfone ou compartilhamento de tela)."
+        : "Não foi possível iniciar: " + (e && e.message ? e.message : e);
+      aviso(msg, "erro"); desenhar(); return;
+    }
+    pedirTelaLigada();
+    relogio = setInterval(tick, 500);
+    elEstado.textContent = "Ouvindo"; travarConfig(true); desenhar();
+  }
+
+  function parar(porErro) {
+    var m = cur();
+    if (rodando) { m.decorrido = segAgora(); }
+    rodando = false;
+    clearInterval(relogio);
+    try { if (rec) { rec.onend = null; rec.stop(); } } catch (e) {}
+    pararWhisper(); pararAula();
+    try { if (wake) wake.release(); } catch (e) {}
+    wake = null;
+    if (parcial) { addLinha(parcial); parcial = ""; }
+    salvar(); tick();
+    raiz.classList.remove("gravando");
+    elEstado.textContent = "Parado"; travarConfig(false); desenhar();
+    if (!porErro) aviso((pendentes || aulaEmUso()) ? "Parado. Terminando a transcrição dos últimos trechos..." : "Parado. O texto está salvo neste aparelho.", "ok");
+    var depois = function () { desenhar(); if (!rodando) { rodarEtl(true); mostrarPendentes(); } };   // ETL automático depois do último trecho
+    if (aulaEmUso()) aulaAoVazio(depois); else fila.then(depois);
+  }
+  btnIniciar.addEventListener("click", function () { rodando ? parar(false) : iniciar(); });
+
+  /* ---------- Configurações (idioma, fonte, motor) ---------- */
+  function travarConfig(sim) { ["selFonte", "selMotor", "selVel", "idPt", "idEn"].forEach(function (id) { $(id).disabled = sim; }); }
+  function atualizarConfig() {
+    var cfg = S.cfg;
+    $("selIdioma").value = cfg.lang; $("selFonte").value = cfg.fonte; $("selMotor").value = cfg.motor; $("selVel").value = cfg.vel;
+    $("campoVel").hidden = cfg.motor !== "whisper";
+    $("painelAula").hidden = cfg.motor !== "aula";
+    $("selBloco").value = String(cfg.bloco || 5); $("selAulaMotor").value = cfg.aulaMotor || "whisper"; $("selModeloW").value = cfg.modeloW || "base";
+    $("chkGAuto").checked = cfg.gauto !== false; $("inpGModelo").value = cfg.gmodelo || "";
+    $("inpGKey").placeholder = lerChave() ? "chave salva neste aparelho (cole outra para trocar)" : "cole a chave aqui";
+    statusAula();
+    $("idPt").setAttribute("aria-pressed", cfg.lang === "pt-BR"); $("idEn").setAttribute("aria-pressed", cfg.lang === "en-US");
+    var optsFonte = $("selFonte").options;
+    for (var i = 0; i < optsFonte.length; i++) { if (optsFonte[i].value !== "mic") optsFonte[i].disabled = !TEM_TELA; }
+    if (!TEM_TELA && cfg.fonte !== "mic") { cfg.fonte = "mic"; $("selFonte").value = "mic"; }
+    $("selMotor").options[1].disabled = (cfg.fonte !== "mic") || !SR;
+    if (cfg.fonte !== "mic" && cfg.motor === "chrome") { cfg.motor = "whisper"; $("selMotor").value = "whisper"; }
+    if (!SR && cfg.motor === "chrome") { cfg.motor = "whisper"; $("selMotor").value = "whisper"; }
+    var ajuda = "";
+    if (cfg.motor === "aula") ajuda = "Modo aula: grava em blocos de " + (cfg.bloco || 5) + " min, corta numa pausa, transcreve cada bloco e apaga o áudio. Deixe a tela ligada e o celular na tomada." + (cfg.fonte !== "mic" ? " Com a aba, escolha a aba da aula e marque \"Compartilhar áudio\"." : "");
+    else if (CELULAR) ajuda = "No celular só o microfone está disponível. Para chamadas, coloque no alto-falante.";
+    else if (cfg.fonte !== "mic") ajuda = "Ao iniciar, o Chrome abre a janela de compartilhamento: escolha a ABA do Google Meet, do Zoom Web (zoom.us/wc) ou de qualquer site e marque \"Compartilhar áudio da guia\". No Linux e no Mac só vale áudio de aba (não do sistema inteiro); o app Zoom instalado não é captado, entre pelo Zoom Web. Use fones para o microfone não captar o som da caixa." + (cfg.fonte === "ambos" ? " Com os dois, as falas saem como \"Participantes\" (aba) e \"Eu\" (microfone)." : "");
+    else if (cfg.motor === "whisper") ajuda = "Whisper local: o áudio é processado só neste navegador. A primeira vez baixa ~80 MB.";
+    $("ajudaFonte").textContent = ajuda;
+    salvar();
+  }
+  $("idPt").addEventListener("click", function () { S.cfg.lang = "pt-BR"; atualizarConfig(); });
+  $("idEn").addEventListener("click", function () { S.cfg.lang = "en-US"; atualizarConfig(); });
+  $("selIdioma").addEventListener("change", function () { S.cfg.lang = this.value; atualizarConfig(); });
+  $("selFonte").addEventListener("change", function () { S.cfg.fonte = this.value; atualizarConfig(); });
+  $("selMotor").addEventListener("change", function () { S.cfg.motor = this.value; atualizarConfig(); });
+  $("selBloco").addEventListener("change", function () { S.cfg.bloco = +this.value; atualizarConfig(); });
+  $("selAulaMotor").addEventListener("change", function () { S.cfg.aulaMotor = this.value; AULA.lentos = 0; atualizarConfig(); });
+  $("selModeloW").addEventListener("change", function () { S.cfg.modeloW = this.value; atualizarConfig(); });
+  $("chkGAuto").addEventListener("change", function () { S.cfg.gauto = this.checked; salvar(); });
+  $("inpGModelo").addEventListener("change", function () { S.cfg.gmodelo = this.value.trim(); salvar(); });
+  $("inpGKey").addEventListener("change", function () {
+    var v = this.value.trim(); this.value = "";
+    try { if (v) localStorage.setItem(GKEY, v); else localStorage.removeItem(GKEY); aviso(v ? "Chave salva neste aparelho." : "Chave removida.", "ok"); } catch (e) { aviso("Não consegui salvar a chave neste navegador.", "erro"); }
+    atualizarConfig();
+  });
+  $("selVel").addEventListener("change", function () { S.cfg.vel = this.value; atualizarConfig(); });
+  Object.keys(VEL).forEach(function (k) { var o = document.createElement("option"); o.value = k; o.textContent = VEL[k].nome; $("selVel").appendChild(o); });
+
+  /* ---------- Destaque, nota, falantes ---------- */
+  $("btnDestaque").addEventListener("click", function () { addLinha("", null, "dest"); desenhar(); aviso("Momento marcado.", "ok"); });
+  $("btnNota").addEventListener("click", function () { $("boxNota").hidden = !$("boxNota").hidden; if (!$("boxNota").hidden) $("inpNota").focus(); });
+  function salvarNota() { var v = $("inpNota").value.trim(); if (!v) return; addLinha(v, null, "nota"); $("inpNota").value = ""; desenhar(); }
+  $("btnSalvarNota").addEventListener("click", salvarNota);
+  $("inpNota").addEventListener("keydown", function (e) { if (e.key === "Enter") salvarNota(); });
+
+  function desenharFalantes() {
+    var box = $("chipsFalantes"); box.textContent = "";
+    [""].concat(S.falantes).forEach(function (nome) {
+      var b = document.createElement("button"); b.type = "button";
+      b.textContent = nome || "Sem nome"; if (S.cfg.falante === nome) b.className = "sel";
+      b.addEventListener("click", function () { S.cfg.falante = nome; salvar(); desenharFalantes(); });
+      box.appendChild(b);
+    });
+  }
+  $("btnAddFalante").addEventListener("click", function () {
+    var v = $("inpFalante").value.trim(); if (!v) return;
+    if (S.falantes.indexOf(v) < 0) S.falantes.push(v);
+    S.cfg.falante = v; $("inpFalante").value = ""; salvar(); desenharFalantes(); desenhar();
+  });
+  $("btnLimpaFalantes").addEventListener("click", function () { S.falantes = []; S.cfg.falante = ""; salvar(); desenharFalantes(); desenhar(); });
+
+  /* ---------- Glossário ---------- */
+  $("btnGlossario").addEventListener("click", function () { S.glossario = $("inpGlossario").value; salvar(); aviso("Glossário salvo.", "ok"); });
+  $("btnAplicarGlossario").addEventListener("click", function () {
+    S.glossario = $("inpGlossario").value;
+    cur().linhas.forEach(function (l) { if (l.k === "fala") l.s = aplicarGlossario(l.s); });
+    salvar(); desenhar(); aviso("Glossário aplicado nesta reunião.", "ok");
+  });
+
+  /* ---------- Reuniões (pasta, busca, lixeira, mesclar) ---------- */
+  function botao(txt, fn) { var b = document.createElement("button"); b.type = "button"; b.textContent = txt; b.addEventListener("click", fn); return b; }
+  function desenharReunioes() {
+    var box = $("listaReunioes"), lix = $("listaLixeira"), q = $("inpBusca").value.trim().toLowerCase();
+    box.textContent = ""; lix.textContent = "";
+    S.reunioes.slice().sort(function (a, b) { return b.criada - a.criada; }).forEach(function (m) {
+      var achados = [];
+      if (q) {
+        if (m.titulo.toLowerCase().indexOf(q) >= 0) achados.push("(título)");
+        m.linhas.forEach(function (l) { if (achados.length < 3 && l.s.toLowerCase().indexOf(q) >= 0) achados.push("[" + hhmmss(l.t) + "] " + l.s); });
+        if (!achados.length) return;
+      }
+      var d = document.createElement("div"); d.className = "reuniao";
+      var t = document.createElement("div"); t.textContent = (m.id === S.atual && !m.lixo ? "● " : "") + m.titulo;
+      t.style.fontWeight = "700";
+      var info = document.createElement("p"); info.className = "trecho";
+      info.textContent = dataCurta(m.criada) + " · " + hhmmss(m.decorrido) + " · " + contarPalavras(m) + " palavras";
+      d.appendChild(t); d.appendChild(info);
+      achados.forEach(function (a) { var p = document.createElement("p"); p.className = "trecho"; p.textContent = a; d.appendChild(p); });
+      var ac = document.createElement("div"); ac.className = "acoes";
+      if (!m.lixo) {
+        if (m.id !== S.atual) ac.appendChild(botao("Abrir", function () { if (rodando) { aviso("Pare a transcrição antes de trocar de reunião.", "atencao"); return; } S.atual = m.id; salvar(); desenhar(); desenharReunioes(); }));
+        ac.appendChild(botao("Renomear", function () { var n = prompt("Novo nome:", m.titulo); if (n && n.trim()) { m.titulo = n.trim(); salvar(); desenhar(); desenharReunioes(); } }));
+        if (m.id !== S.atual) ac.appendChild(botao("Mesclar na aberta", function () {
+          if (rodando) { aviso("Pare a transcrição antes de mesclar.", "atencao"); return; }
+          var alvo = cur(), deslocamento = alvo.decorrido;
+          m.linhas.forEach(function (l) { var c = JSON.parse(JSON.stringify(l)); c.t += deslocamento; alvo.linhas.push(c); });
+          alvo.decorrido += m.decorrido; m.lixo = true; salvar(); desenhar(); desenharReunioes(); aviso("Reuniões mescladas (a outra foi para a lixeira).", "ok");
+        }));
+        ac.appendChild(botao("Apagar", function () {
+          if (rodando && m.id === S.atual) { aviso("Pare a transcrição antes de apagar.", "atencao"); return; }
+          m.lixo = true; salvar(); desenhar(); desenharReunioes();
+        }));
+        d.appendChild(ac); box.appendChild(d);
+      } else {
+        ac.appendChild(botao("Restaurar", function () { m.lixo = false; salvar(); desenharReunioes(); }));
+        ac.appendChild(botao("Excluir de vez", function () { S.reunioes = S.reunioes.filter(function (x) { return x !== m; }); salvar(); desenharReunioes(); }));
+        d.appendChild(ac); lix.appendChild(d);
+      }
+    });
+    if (!box.children.length) { var v = document.createElement("p"); v.className = "ajuda"; v.textContent = q ? "Nada encontrado." : "Nenhuma reunião."; box.appendChild(v); }
+    if (!lix.children.length) { var v2 = document.createElement("p"); v2.className = "ajuda"; v2.textContent = "Lixeira vazia."; lix.appendChild(v2); }
+  }
+  $("inpBusca").addEventListener("input", desenharReunioes);
+  $("detReunioes").addEventListener("toggle", desenharReunioes);
+  $("btnNova").addEventListener("click", function () {
+    if (rodando) { aviso("Pare a transcrição antes de criar outra reunião.", "atencao"); return; }
+    novaReuniao(); salvar(); desenhar(); tick(); desenharReunioes(); aviso("Nova reunião criada.", "ok");
+  });
+
+  /* ---------- Saída: Claude e exportações ---------- */
+  function haTexto() { if (!cur().linhas.length) { aviso("Ainda não há texto.", "atencao"); return false; } return true; }
+  async function copiar(txt, okMsg) {
+    try { await navigator.clipboard.writeText(txt); aviso(okMsg, "ok"); }
+    catch (e) {
+      var ta = document.createElement("textarea"); ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e2) {}
+      document.body.removeChild(ta);
+      aviso(ok ? okMsg : "Não consegui copiar. Use Baixar .txt.", ok ? "ok" : "erro");
+    }
+  }
+  function baixar(conteudo, ext, tipo) {
+    var d = new Date(), m = cur();
+    var nome = "reuniao_" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "_" + pad(d.getHours()) + pad(d.getMinutes()) + "." + ext;
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([conteudo], { type: tipo + ";charset=utf-8" }));
+    a.download = nome; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+    aviso("Arquivo " + nome + " gerado.", "ok");
+  }
+  function cabecalho(m) { return "Reunião: " + m.titulo + " · Data: " + new Date(m.criada).toLocaleDateString("pt-BR") + " · Duração aproximada: " + hhmmss(m.decorrido) + " · Idioma falado: " + (S.cfg.lang === "en-US" ? "inglês" : "português do Brasil"); }
+  function htmlDoc(m) {
+    var h = function (s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+    return "<!doctype html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\"><title>" + h(m.titulo) + "</title>" +
+      "<style>body{font-family:Calibri,Arial,sans-serif;line-height:1.5;max-width:780px;margin:24px auto}p{margin:0 0 8px}.t{color:#666}</style></head><body><h1>" + h(m.titulo) + "</h1><p class=\"t\">" + h(cabecalho(m)) + "</p>" +
+      m.linhas.map(function (l) { return "<p>" + h(linhaTexto(l)) + "</p>"; }).join("") + "</body></html>";
+  }
+  function srtTempo(s) { var ms = Math.round((s % 1) * 1000), i = Math.floor(s); return hhmmss(i) + "," + (ms < 100 ? (ms < 10 ? "00" : "0") : "") + ms; }
+  function srt(m) {
+    var linhas = m.linhas.filter(function (l) { return l.k !== "dest"; });
+    return linhas.map(function (l, i) {
+      var fim = i + 1 < linhas.length ? Math.max(l.t + 1, Math.min(linhas[i + 1].t, l.t + 8)) : l.t + 4;
+      return (i + 1) + "\n" + srtTempo(l.t) + " --> " + srtTempo(fim) + "\n" + (l.f ? l.f + ": " : "") + (l.k === "nota" ? "[NOTA] " : "") + l.s + "\n";
+    }).join("\n");
+  }
+  function markdown(m) {
+    return "# " + m.titulo + "\n\n" + cabecalho(m) + "\n\n" + m.linhas.map(function (l) {
+      if (l.k === "dest") return "- **[" + hhmmss(l.t) + "] ★ Momento importante**";
+      if (l.k === "nota") return "- **[" + hhmmss(l.t) + "] Nota:** " + l.s;
+      return "- [" + hhmmss(l.t) + "] " + (l.d ? "★ " : "") + (l.f ? "**" + l.f + ":** " : "") + l.s;
+    }).join("\n") + "\n";
+  }
+
+  function montarModelos() {
+    var s = $("selModelo"); s.textContent = "";
+    Object.keys(MODELOS).forEach(function (k) { var o = document.createElement("option"); o.value = k; o.textContent = MODELOS[k].nome; s.appendChild(o); });
+  }
+  $("selModelo").addEventListener("change", function () { $("boxPergunta").hidden = this.value !== "perguntar"; });
+  $("btnClaude").addEventListener("click", function () {
+    if (!haTexto()) return;
+    var k = $("selModelo").value, m = cur(), extra = "";
+    if (k === "perguntar") {
+      var q = $("inpPergunta").value.trim();
+      if (!q) { aviso("Digite a pergunta primeiro.", "atencao"); return; }
+      extra = "\n\nPERGUNTA: " + q;
+    }
+    var prompt = BASE + "\n\n" + MODELOS[k].p.join("\n") + extra + "\n\n" + cabecalho(m) + "\n\nTranscrição:\n" + textoPuro(m);
+    copiar(prompt, "Copiado. Abra o app do Claude e cole.");
+  });
+  $("btnTexto").addEventListener("click", function () { if (haTexto()) copiar(textoPuro(), "Texto copiado."); });
+  $("btnCompartilhar").addEventListener("click", async function () {
+    if (!haTexto()) return;
+    if (navigator.share) { try { await navigator.share({ title: cur().titulo, text: textoPuro() }); } catch (e) {} }
+    else { copiar(textoPuro(), "Compartilhar não existe aqui. Texto copiado."); }
+  });
+  $("btnTxt").addEventListener("click", function () { if (haTexto()) baixar(cabecalho(cur()) + "\n\n" + textoPuro() + "\n", "txt", "text/plain"); });
+  $("btnMd").addEventListener("click", function () { if (haTexto()) baixar(markdown(cur()), "md", "text/markdown"); });
+  $("btnSrt").addEventListener("click", function () { if (haTexto()) baixar(srt(cur()), "srt", "application/x-subrip"); });
+  $("btnDoc").addEventListener("click", function () { if (haTexto()) baixar(htmlDoc(cur()), "doc", "application/msword"); });
+  $("btnPdf").addEventListener("click", function () {
+    if (!haTexto()) return;
+    var w = window.open("", "_blank");
+    if (!w) { aviso("O navegador bloqueou a janela. Permita pop-ups ou use Baixar Word.", "erro"); return; }
+    w.document.write(htmlDoc(cur())); w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 400);
+  });
+
+  /* ---------- ETL completo: Extrair → Transformar → Carregar ---------- */
+  var STOP = ("a o as os um uma uns umas de do da dos das em no na nos nas por para com sem sob sobre entre até que se como mas mais menos muito muita muitos muitas já não sim também então assim aqui ali lá isso isto esse essa esses essas este esta estes estas aquele aquela eu tu ele ela nós vocês eles elas me te lhe meu minha seu sua nosso nossa dele dela ser estar ter haver fazer ir vai vou vamos foi era são está estão tem têm tinha ainda só pra pro pela pelo quando onde porque qual quais quem tudo todo toda todos todas cada outro outra outros outras coisa coisas gente tipo bom bem agora depois antes hoje ontem amanhã então pode podem posso podemos precisa precisamos fazendo falando falar disse acho achei sendo tendo ficar fica ficou fiz vez vezes dessa desse nesse nessa dessas desses também mesmo mesma sempre nunca ainda depois the and for are but not you all can had her was one our out has have been from they will with this that what when your said there their which would about into than them then these those just like very also here some such only over more most other could should").split(" ");
+  var STOPSET = {}; STOP.forEach(function (w) { STOPSET[w] = 1; });
+  var DIAS = "segunda|terça|quarta|quinta|sexta|sábado|domingo|monday|tuesday|wednesday|thursday|friday|saturday|sunday";
+  function W(src, flags) { return new RegExp("(?<![\\p{L}\\p{N}])(?:" + src + ")(?![\\p{L}\\p{N}])", flags || "iu"); }
+  var RE_ACAO = W("vou|vamos (?:enviar|mandar|ligar|agendar|marcar|revisar|verificar|preparar|fechar|confirmar|fazer|criar|definir|resolver)|preciso|precisamos|tenho que|temos que|tem que|fica combinado|ficou combinado|fico de|ficamos de|pode (?:enviar|mandar|ligar|revisar|verificar|agendar)|(?:enviar|mandar|ligar|agendar|marcar|revisar|verificar|preparar|fechar|confirmar) (?:o|a|os|as|um|uma|para|pra|com)|prazo|i will|i'll|we will|we'll|we need to|i need to|let's|action item|deadline|follow up|next step|próximo passo|próximos passos");
+  var RE_DECISAO = W("decidimos|ficou decidido|decidiu-se|decidido|aprovado|aprovamos|fechado|combinado|vamos (?:com|usar|adotar|seguir|optar|contratar|lançar)|we decided|we agreed|agreed|approved|decision|the decision");
+  var RE_RISCO = W("risco|problema|bloqueio|bloqueado|atraso|atrasar|atrasado|preocupa\\p{L}*|dificuldade|impedimento|risk|blocker|blocked|delay|delayed|issue|concern");
+  var RE_PRAZO = W("hoje|amanhã|depois de amanhã|(?:dia|até) \\d{1,2}(?:/\\d{1,2})?|\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?|semana que vem|próxima semana|fim do mês|final do mês|fim da semana|até (?:" + DIAS + ")|(?:na |nesta |nessa |próxima |proxima )?(?:" + DIAS + ")|today|tomorrow|next week|end of (?:the )?(?:day|week|month)|by (?:" + DIAS + ")", "iu");
+
+  function csv(linhas, cols) {
+    var q = function (v) { v = v == null ? "" : String(v); return /[;"\n\r]/.test(v) ? "\"" + v.replace(/"/g, "\"\"") + "\"" : v; };
+    return "﻿" + [cols.map(function (c) { return q(c[1]); }).join(";")].concat(linhas.map(function (r) {
+      return cols.map(function (c) { return q(r[c[0]]); }).join(";");
+    })).join("\r\n") + "\r\n";
+  }
+  function limparTexto(s) {
+    s = s.replace(/(?<![\p{L}])(?:ã+h+m*|ahn+|hmm+|uhm+|hum+|éh+|uh+|erm+)(?![\p{L}])[,.]?\s*/giu, "")
+         .replace(/,?\s*(?<![\p{L}])né(?![\p{L}])\??/giu, "")
+         .replace(/(?<![\p{L}])([\p{L}]{1,12})(?:\s+\1)+(?![\p{L}])/giu, "$1")
+         .replace(/\s+/g, " ").replace(/\s+([,.!?])/g, "$1").trim();
+    if (!s) return "";
+    s = s.charAt(0).toUpperCase() + s.slice(1);
+    return /[.!?…]$/.test(s) ? s : s + ".";
+  }
+  function frases(t) { return t.split(/(?<=[.!?])\s+/).map(function (x) { return x.trim(); }).filter(function (x) { return x.length > 2; }); }
+  function palavras(t) { return (t.toLowerCase().match(/[\p{L}][\p{L}'-]{3,}/gu) || []).filter(function (w) { return !STOPSET[w]; }); }
+  function topo(mapa, n) {
+    return Object.keys(mapa).map(function (k) { return [k, mapa[k]]; }).sort(function (a, b) { return b[1] - a[1] || (a[0] < b[0] ? -1 : 1); }).slice(0, n);
+  }
+  function nPal(t) { return t.split(/\s+/).filter(Boolean).length; }
+
+  // E — Extração: o texto bruto vira registros com início, fim, falante e marcações.
+  function etlExtrair(m) {
+    var ord = m.linhas.map(function (l, i) { return { l: l, i: i }; }).sort(function (a, b) { return a.l.t - b.l.t || a.i - b.i; }).map(function (x) { return x.l; });
+    var fala = ord.filter(function (l) { return l.k === "fala"; });
+    var segsE = fala.map(function (l, i) {
+      var prox = fala[i + 1], w = nPal(l.s), estim = w / 2.5 + 1, gap = prox ? prox.t - l.t : estim;
+      return { id: i + 1, inicio: +l.t.toFixed(1), fim: +(l.t + Math.max(1, Math.min(estim, gap > 0.5 ? gap : estim))).toFixed(1), falante: l.f || "Não identificado", texto_original: l.s, destaque: !!l.d, palavras: w };
+    });
+    return {
+      segmentos: segsE,
+      notas: ord.filter(function (l) { return l.k === "nota"; }).map(function (l) { return { t: l.t, texto: l.s }; }),
+      marcados: ord.filter(function (l) { return l.k === "dest"; }).map(function (l) { return l.t; })
+    };
+  }
+
+  // T — Transformação: limpeza, turnos, entidades, tarefas, decisões, resumo, capítulos e estatísticas.
+  function etlTransformar(m, ex) {
+    var segsT = [], ant = "";
+    ex.segmentos.forEach(function (sg) {
+      var c = limparTexto(sg.texto_original);
+      if (!c || c.toLowerCase() === ant) return;
+      ant = c.toLowerCase();
+      segsT.push({ id: sg.id, inicio: sg.inicio, fim: sg.fim, falante: sg.falante, texto: c, texto_original: sg.texto_original, destaque: sg.destaque, palavras: nPal(c) });
+    });
+    var turnos = [];
+    segsT.forEach(function (sg) {
+      var u = turnos[turnos.length - 1];
+      if (u && u.falante === sg.falante && sg.inicio - u.fim < 4) { u.texto += " " + sg.texto; u.fim = sg.fim; u.palavras += sg.palavras; u.destaque = u.destaque || sg.destaque; }
+      else turnos.push({ inicio: sg.inicio, fim: sg.fim, falante: sg.falante, texto: sg.texto, palavras: sg.palavras, destaque: sg.destaque });
+    });
+    var tudo = segsT.map(function (s) { return s.texto; }).join(" ");
+    var sents = [];
+    segsT.forEach(function (sg) { frases(sg.texto).forEach(function (f) { sents.push({ t: sg.inicio, falante: sg.falante, texto: f, destaque: sg.destaque }); }); });
+
+    // palavras-chave e termos compostos
+    var freq = {}, bi = {};
+    var toks = palavras(tudo);
+    toks.forEach(function (w, i) { freq[w] = (freq[w] || 0) + 1; if (i) { var b = toks[i - 1] + " " + w; bi[b] = (bi[b] || 0) + 1; } });
+    var chaves = topo(freq, 20).map(function (x) { return { termo: x[0], ocorrencias: x[1] }; });
+    var compostos = topo(bi, 10).filter(function (x) { return x[1] > 1; }).map(function (x) { return { termo: x[0], ocorrencias: x[1] }; });
+
+    // entidades
+    var ent = [], visto = {};
+    function add(tipo, valor, t) { var k = tipo + "|" + valor.toLowerCase(); if (!visto[k]) { visto[k] = { tipo: tipo, valor: valor, ocorrencias: 0, primeira_vez: t }; ent.push(visto[k]); } visto[k].ocorrencias++; }
+    var padroes = [
+      ["e-mail", /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g], ["link", /https?:\/\/[^\s)]+|www\.[^\s)]+/gi],
+      ["telefone", /(?:\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}/g],
+      ["valor", /(?:R\$|US\$|\$|€)\s?\d[\d.,]*(?:\s?(?:mil|milhões?|milhão|k|mi|bi))?|\d[\d.,]*\s?(?:reais|dólares|euros|dollars)/gi],
+      ["percentual", /\d+(?:[.,]\d+)?\s?(?:%|por cento|percent)/gi],
+      ["data", /\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b|(?<![\p{L}])dia \d{1,2}(?![\p{L}\p{N}\/])/giu],
+      ["hora", /\b\d{1,2}:\d{2}\b|\b\d{1,2}\s?h(?:\s?\d{2})?\b/gi]
+    ];
+    segsT.forEach(function (sg) {
+      padroes.forEach(function (p) { (sg.texto.match(p[1]) || []).forEach(function (v) { add(p[0], v.trim(), sg.inicio); }); });
+      frases(sg.texto).forEach(function (f) {
+        var ws = f.replace(/[,;:"()]/g, " ").split(/\s+/).filter(Boolean), nome = [];
+        ws.forEach(function (w, i) {
+          var ok = i > 0 && /^\p{Lu}\p{Ll}{2,}$/u.test(w) && !STOPSET[w.toLowerCase()];
+          if (ok) nome.push(w); else { if (nome.length) add("nome", nome.join(" "), sg.inicio); nome = []; }
+        });
+        if (nome.length) add("nome", nome.join(" "), sg.inicio);
+      });
+    });
+    ent.sort(function (a, b) { return a.tipo < b.tipo ? -1 : a.tipo > b.tipo ? 1 : b.ocorrencias - a.ocorrencias; });
+
+    // tarefas, decisões, riscos, perguntas
+    function quais(re) { return sents.filter(function (x) { return re.test(x.texto); }); }
+    var tarefas = quais(RE_ACAO).map(function (x, i) {
+      var pr = x.texto.match(RE_PRAZO);
+      return { n: i + 1, tempo: hhmmss(x.t), responsavel: x.falante, acao: x.texto, prazo: pr ? pr[0] : "não definido", marcada: x.destaque ? "sim" : "não" };
+    });
+    var decisoes = quais(RE_DECISAO).map(function (x, i) { return { n: i + 1, tempo: hhmmss(x.t), falante: x.falante, decisao: x.texto }; });
+    var riscos = quais(RE_RISCO).map(function (x, i) { return { n: i + 1, tempo: hhmmss(x.t), falante: x.falante, trecho: x.texto }; });
+    var perguntas = sents.filter(function (x) { return /\?$/.test(x.texto) && nPal(x.texto) >= 3; }).map(function (x, i) { return { n: i + 1, tempo: hhmmss(x.t), falante: x.falante, pergunta: x.texto }; });
+
+    // resumo extrativo: frases com mais termos relevantes, mais bônus para ★, decisões e tarefas
+    var pontuadas = sents.map(function (x, i) {
+      var ps = palavras(x.texto), sc = ps.reduce(function (a, w) { return a + (freq[w] || 0); }, 0) / Math.sqrt(Math.max(ps.length, 1));
+      if (x.destaque) sc *= 1.6; if (RE_DECISAO.test(x.texto)) sc *= 1.4; if (RE_ACAO.test(x.texto)) sc *= 1.2;
+      if (nPal(x.texto) < 5) sc *= 0.3;
+      return { i: i, sc: sc, x: x };
+    }).sort(function (a, b) { return b.sc - a.sc; }).slice(0, Math.min(6, Math.max(2, Math.round(sents.length / 8)))).sort(function (a, b) { return a.i - b.i; });
+    var resumo = pontuadas.map(function (p) { return p.x.texto; });
+
+    // capítulos: a cada ~5 min ou pausa longa
+    var caps = [], cur0 = null;
+    turnos.forEach(function (u) {
+      if (!cur0 || u.inicio - cur0.inicio >= 300 || u.inicio - cur0.fim > 90) { cur0 = { inicio: u.inicio, fim: u.fim, textos: [], falantes: {} }; caps.push(cur0); }
+      cur0.fim = u.fim; cur0.textos.push(u.texto); cur0.falantes[u.falante] = 1;
+    });
+    var capitulos = caps.map(function (c, i) {
+      var f = {}; palavras(c.textos.join(" ")).forEach(function (w) { f[w] = (f[w] || 0) + 1; });
+      var primeira = frases(c.textos[0])[0] || "";
+      return { n: i + 1, inicio: hhmmss(c.inicio), fim: hhmmss(c.fim), temas: topo(f, 4).map(function (x) { return x[0]; }).join(", "), falantes: Object.keys(c.falantes).join(", "), abertura: primeira.length > 160 ? primeira.slice(0, 157) + "..." : primeira };
+    });
+
+    // estatísticas por falante e da reunião
+    var porF = {};
+    segsT.forEach(function (sg) { var f = porF[sg.falante] = porF[sg.falante] || { falante: sg.falante, segmentos: 0, palavras: 0, segundos: 0 }; f.segmentos++; f.palavras += sg.palavras; f.segundos += sg.fim - sg.inicio; });
+    var totalS = Object.keys(porF).reduce(function (a, k) { return a + porF[k].segundos; }, 0) || 1;
+    var falantes = Object.keys(porF).map(function (k) { var f = porF[k]; return { falante: f.falante, segmentos: f.segmentos, palavras: f.palavras, tempo_de_fala: hhmmss(f.segundos), participacao: Math.round(f.segundos / totalS * 100) + "%" }; })
+      .sort(function (a, b) { return b.palavras - a.palavras; });
+    var dur = Math.max(m.decorrido, segsT.length ? segsT[segsT.length - 1].fim : 0), totPal = segsT.reduce(function (a, s) { return a + s.palavras; }, 0);
+    var estat = {
+      duracao: hhmmss(dur), segmentos_brutos: ex.segmentos.length, segmentos_limpos: segsT.length, descartados_na_limpeza: ex.segmentos.length - segsT.length,
+      turnos: turnos.length, palavras: totPal, palavras_por_minuto: dur > 0 ? Math.round(totPal / (dur / 60)) : 0, frases: sents.length,
+      tarefas: tarefas.length, decisoes: decisoes.length, riscos: riscos.length, perguntas: perguntas.length, destaques: ex.marcados.length + segsT.filter(function (s) { return s.destaque; }).length, notas: ex.notas.length
+    };
+    return { segmentos: segsT, turnos: turnos, frases: sents, palavras_chave: chaves, termos_compostos: compostos, entidades: ent, tarefas: tarefas, decisoes: decisoes, riscos: riscos, perguntas: perguntas, resumo: resumo, capitulos: capitulos, falantes: falantes, estatisticas: estat };
+  }
+
+  function lista(itens, f) { return itens.length ? itens.map(f).join("\n") : "- (nada encontrado)"; }
+  function etlRelatorio(m, T, ex) {
+    var e = T.estatisticas;
+    return [
+      "# Relatório ETL: " + m.titulo, "",
+      "Data: " + new Date(m.criada).toLocaleDateString("pt-BR") + " · Duração: " + e.duracao + " · Palavras: " + e.palavras + " · Falantes: " + (T.falantes.map(function (f) { return f.falante; }).join(", ") || "nenhum"), "",
+      "> Gerado automaticamente por regras locais (sem IA). Confira os trechos; para uma ata redigida, use \"Copiar com instruções para o Claude\".", "",
+      "## Resumo automático", lista(T.resumo, function (x) { return "- " + x; }), "",
+      "## Decisões", lista(T.decisoes, function (x) { return "- [" + x.tempo + "] " + (x.falante !== "Não identificado" ? x.falante + ": " : "") + x.decisao; }), "",
+      "## Tarefas e próximos passos", lista(T.tarefas, function (x) { return "- [" + x.tempo + "] " + x.acao + " (responsável: " + x.responsavel + "; prazo: " + x.prazo + ")"; }), "",
+      "## Riscos e problemas citados", lista(T.riscos, function (x) { return "- [" + x.tempo + "] " + x.trecho; }), "",
+      "## Perguntas em aberto", lista(T.perguntas, function (x) { return "- [" + x.tempo + "] " + x.pergunta; }), "",
+      "## Capítulos", lista(T.capitulos, function (c) { return "- " + c.inicio + " a " + c.fim + ": " + (c.temas || "sem tema claro") + (c.abertura ? ". Começa com: \"" + c.abertura + "\"" : ""); }), "",
+      "## Palavras-chave", T.palavras_chave.map(function (k) { return k.termo + " (" + k.ocorrencias + ")"; }).join(", ") || "(nenhuma)", "",
+      "## Entidades (e-mails, links, valores, datas, horas, nomes)", lista(T.entidades.slice(0, 60), function (x) { return "- " + x.tipo + ": " + x.valor + " (" + x.ocorrencias + "x)"; }), "",
+      "## Participação", lista(T.falantes, function (f) { return "- " + f.falante + ": " + f.palavras + " palavras, " + f.tempo_de_fala + " de fala, " + f.participacao; }), "",
+      "## Momentos marcados e notas",
+      lista(ex.marcados.map(function (t) { return "- Momento marcado em " + hhmmss(t); }).concat(T.segmentos.filter(function (s) { return s.destaque; }).map(function (s) { return "- ★ [" + hhmmss(s.inicio) + "] " + s.texto; })).concat(ex.notas.map(function (n) { return "- Nota [" + hhmmss(n.t) + "]: " + n.texto; })), function (x) { return x; }), "",
+      "## Qualidade da carga",
+      "- Segmentos brutos: " + e.segmentos_brutos + " · após limpeza: " + e.segmentos_limpos + " · descartados (vazios/repetidos): " + e.descartados_na_limpeza,
+      "- Ritmo médio: " + e.palavras_por_minuto + " palavras por minuto"
+    ].join("\n") + "\n";
+  }
+  function etlBase(m, T) {
+    var partes = [], atual = null;
+    T.turnos.forEach(function (u) {
+      if (!atual || atual.pal >= 150) { atual = { ini: u.inicio, fim: u.fim, pal: 0, txt: [], f: {} }; partes.push(atual); }
+      atual.fim = u.fim; atual.pal += u.palavras; atual.txt.push((u.falante !== "Não identificado" ? u.falante + ": " : "") + u.texto); atual.f[u.falante] = 1;
+    });
+    var topos = T.palavras_chave.slice(0, 8).map(function (k) { return k.termo; }).join(", ");
+    return "---\ntitulo: " + m.titulo + "\ndata: " + new Date(m.criada).toISOString().slice(0, 10) + "\nduracao: " + T.estatisticas.duracao + "\ntemas: " + topos + "\ntipo: base-de-conhecimento-de-reuniao\n---\n\n# " + m.titulo + "\n\nResumo: " + (T.resumo.join(" ") || "(sem resumo)") + "\n\n" +
+      partes.map(function (p, i) {
+        return "## Trecho " + (i + 1) + " [" + hhmmss(p.ini) + " a " + hhmmss(p.fim) + "]\nFalantes: " + Object.keys(p.f).join(", ") + "\n\n" + p.txt.join("\n\n") + "\n";
+      }).join("\n");
+  }
+
+  // L — Carga: gera os arquivos (JSON, CSVs, Markdown, SRT, TXT) e empacota em .zip.
+  function etlArquivos(m, ex, T) {
+    var rel = etlRelatorio(m, T, ex), pref = "reuniao_" + new Date(m.criada).toISOString().slice(0, 10);
+    var json = { esquema: "reuniao-etl-v1", gerado_em: new Date().toISOString(), reuniao: { titulo: m.titulo, criada: new Date(m.criada).toISOString(), idioma: S.cfg.lang, fonte_audio: S.cfg.fonte, motor: S.cfg.motor }, extracao: ex, transformacao: T };
+    var f = [
+      { nome: pref + "/LEIAME.txt", texto: "Pacote ETL da reunião \"" + m.titulo + "\"\n\nrelatorio.md ........ resumo, decisões, tarefas, riscos, perguntas, capítulos\nbase-de-conhecimento.md  texto em trechos com metadados, pronto para colar em qualquer IA\nreuniao.json ....... tudo em um arquivo estruturado (extração + transformação)\ntranscricao.txt/.md  texto com horários e falantes\nlegendas.srt ....... legendas com tempo\ncsv/*.csv .......... planilhas (separador ponto e vírgula, abre no Excel)\n\nA limpeza remove vícios de fala e repetições; o texto original fica em segmentos.csv (texto_original).\n" },
+      { nome: pref + "/relatorio.md", texto: rel },
+      { nome: pref + "/base-de-conhecimento.md", texto: etlBase(m, T) },
+      { nome: pref + "/reuniao.json", texto: JSON.stringify(json, null, 2) },
+      { nome: pref + "/transcricao.txt", texto: cabecalho(m) + "\n\n" + textoPuro(m) + "\n" },
+      { nome: pref + "/transcricao.md", texto: markdown(m) },
+      { nome: pref + "/legendas.srt", texto: srt(m) },
+      { nome: pref + "/csv/segmentos.csv", texto: csv(T.segmentos, [["id", "id"], ["inicio", "inicio_s"], ["fim", "fim_s"], ["falante", "falante"], ["texto", "texto"], ["texto_original", "texto_original"], ["destaque", "destaque"], ["palavras", "palavras"]]) },
+      { nome: pref + "/csv/tarefas.csv", texto: csv(T.tarefas, [["n", "n"], ["tempo", "tempo"], ["responsavel", "responsavel"], ["acao", "acao"], ["prazo", "prazo"], ["marcada", "marcada_com_estrela"]]) },
+      { nome: pref + "/csv/decisoes.csv", texto: csv(T.decisoes, [["n", "n"], ["tempo", "tempo"], ["falante", "falante"], ["decisao", "decisao"]]) },
+      { nome: pref + "/csv/riscos.csv", texto: csv(T.riscos, [["n", "n"], ["tempo", "tempo"], ["falante", "falante"], ["trecho", "trecho"]]) },
+      { nome: pref + "/csv/perguntas.csv", texto: csv(T.perguntas, [["n", "n"], ["tempo", "tempo"], ["falante", "falante"], ["pergunta", "pergunta"]]) },
+      { nome: pref + "/csv/entidades.csv", texto: csv(T.entidades, [["tipo", "tipo"], ["valor", "valor"], ["ocorrencias", "ocorrencias"], ["primeira_vez", "primeira_vez_s"]]) },
+      { nome: pref + "/csv/palavras-chave.csv", texto: csv(T.palavras_chave.concat(T.termos_compostos), [["termo", "termo"], ["ocorrencias", "ocorrencias"]]) },
+      { nome: pref + "/csv/capitulos.csv", texto: csv(T.capitulos, [["n", "n"], ["inicio", "inicio"], ["fim", "fim"], ["temas", "temas"], ["falantes", "falantes"], ["abertura", "abertura"]]) },
+      { nome: pref + "/csv/falantes.csv", texto: csv(T.falantes, [["falante", "falante"], ["segmentos", "segmentos"], ["palavras", "palavras"], ["tempo_de_fala", "tempo_de_fala"], ["participacao", "participacao"]]) }
+    ];
+    return { arquivos: f, relatorio: rel, json: json, pasta: pref };
+  }
+
+  var CRCT = (function () { var t = [], c, n, k; for (n = 0; n < 256; n++) { c = n; for (k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(b) { var c = 0xFFFFFFFF; for (var i = 0; i < b.length; i++) c = CRCT[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  function zipar(arquivos) {
+    var enc = new TextEncoder(), partes = [], central = [], off = 0, tamC = 0;
+    arquivos.forEach(function (a) {
+      var nome = enc.encode(a.nome), dados = enc.encode(a.texto), crc = crc32(dados);
+      var h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(12, 0x21, true);
+      h.setUint32(14, crc, true); h.setUint32(18, dados.length, true); h.setUint32(22, dados.length, true); h.setUint16(26, nome.length, true);
+      partes.push(new Uint8Array(h.buffer), nome, dados);
+      var c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(14, 0x21, true);
+      c.setUint32(16, crc, true); c.setUint32(20, dados.length, true); c.setUint32(24, dados.length, true); c.setUint16(28, nome.length, true); c.setUint32(42, off, true);
+      central.push(new Uint8Array(c.buffer), nome);
+      off += 30 + nome.length + dados.length; tamC += 46 + nome.length;
+    });
+    var e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, arquivos.length, true); e.setUint16(10, arquivos.length, true); e.setUint32(12, tamC, true); e.setUint32(16, off, true);
+    return new Blob(partes.concat(central, [new Uint8Array(e.buffer)]), { type: "application/zip" });
+  }
+  function baixarBlob(blob, nome) {
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nome;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+  }
+
+  var etlAtual = null;   // { id, nLinhas, rel, json, arquivos, pasta }
+  function rodarEtl(auto) {
+    var m = cur();
+    if (!m.linhas.some(function (l) { return l.k === "fala"; })) { if (!auto) aviso("Ainda não há falas para processar.", "atencao"); return; }
+    try {
+      var ex = etlExtrair(m), T = etlTransformar(m, ex), saida = etlArquivos(m, ex, T);
+      etlAtual = { id: m.id, nLinhas: m.linhas.length, rel: saida.relatorio, json: saida.json, arquivos: saida.arquivos, pasta: saida.pasta, quando: Date.now(), est: T.estatisticas };
+      m.etl = { nLinhas: m.linhas.length, quando: etlAtual.quando, relatorio: saida.relatorio };
+      salvar(); desenharEtl();
+      aviso("ETL concluído: " + saida.arquivos.length + " arquivos prontos. Baixe o pacote .zip.", "ok");
+    } catch (e) { aviso("Falha no ETL: " + (e && e.message ? e.message : e), "erro"); }
+  }
+  function desenharEtl() {
+    var m = cur(), box = $("etlSaida"), r = (etlAtual && etlAtual.id === m.id) ? etlAtual.rel : (m.etl ? m.etl.relatorio : "");
+    var velho = m.etl && m.etl.nLinhas !== m.linhas.length;
+    var chave = m.id + "|" + (m.etl ? m.etl.quando : 0) + "|" + !!velho;
+    if (box.dataset.chave === chave) return;
+    box.dataset.chave = chave;
+    box.textContent = r ? (velho ? "ATENÇÃO: o texto mudou depois deste ETL. Rode de novo.\n\n" : "") + r : "Ainda não rodou. Ele roda sozinho quando você para a transcrição.";
+    var tem = !!r; ["btnEtlZip", "btnEtlJson", "btnEtlCopiar"].forEach(function (id) { $(id).disabled = !tem; });
+  }
+  function garantirEtl() {
+    var m = cur();
+    if (!etlAtual || etlAtual.id !== m.id || etlAtual.nLinhas !== m.linhas.length) rodarEtl(false);
+    return etlAtual && etlAtual.id === m.id;
+  }
+  $("btnEtl").addEventListener("click", function () { if (rodando) { aviso("Pare a transcrição para rodar o ETL completo.", "atencao"); return; } rodarEtl(false); });
+  $("btnEtlZip").addEventListener("click", function () { if (garantirEtl()) { baixarBlob(zipar(etlAtual.arquivos), etlAtual.pasta + ".zip"); aviso("Pacote " + etlAtual.pasta + ".zip gerado.", "ok"); } });
+  $("btnEtlJson").addEventListener("click", function () { if (garantirEtl()) { baixarBlob(new Blob([JSON.stringify(etlAtual.json, null, 2)], { type: "application/json" }), etlAtual.pasta + ".json"); aviso("JSON gerado.", "ok"); } });
+  $("btnEtlCopiar").addEventListener("click", function () { if (garantirEtl()) copiar(etlAtual.rel, "Relatório copiado."); });
+
+  /* ---------- Apagar texto ---------- */
+  $("btnLimpar").addEventListener("click", function () { if (rodando) { aviso("Pare a transcrição antes de limpar.", "atencao"); return; } $("confirma").hidden = false; });
+  $("btnNao").addEventListener("click", function () { $("confirma").hidden = true; });
+  $("btnSim").addEventListener("click", function () {
+    var m = cur(); m.linhas = []; m.decorrido = 0; salvar(); $("confirma").hidden = true;
+    desenhar(); tick(); aviso("Texto desta reunião apagado.", "ok");
+  });
+
+  /* ---------- Tema claro/escuro (escuro é o padrão; a escolha fica salva) ---------- */
+  var palco = $("palco");
+  try { if (localStorage.getItem("palco-tema") === "c") palco.classList.add("claro"); } catch (e) {}
+  $("tema").addEventListener("click", function () {
+    var c = palco.classList.toggle("claro");
+    try { localStorage.setItem("palco-tema", c ? "c" : "e"); } catch (e) {}
+  });
+
+  /* ---------- Início ---------- */
+  carregar(); cur(); montarModelos();
+  $("inpGlossario").value = S.glossario;
+  atualizarConfig(); desenharFalantes(); desenhar(); tick();
+  mostrarPendentes();
+  if (cur().linhas.length) { aviso("Texto anterior recuperado deste aparelho.", "atencao"); }
+  else if (!SR) { aviso("Este navegador não tem o reconhecimento do Chrome. Use o motor Whisper local ou abra no Chrome.", "atencao"); }
+})();
+</script>
+</body>
+</html>
